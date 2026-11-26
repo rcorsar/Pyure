@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/album_sort_order.dart';
@@ -88,7 +90,9 @@ class AppPreferences {
 
   double getVolume() {
     final value = _prefs.getDouble(_kVolume);
-    if (value == null) return 0.85;
+    if (value == null) {
+      return Platform.isAndroid || Platform.isIOS ? 1.0 : 0.85;
+    }
     return value.clamp(0.0, 1.0);
   }
 

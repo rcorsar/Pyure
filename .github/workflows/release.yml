@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза (если пусто — v<версия из pubspec.yaml>)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.1"
+          cache: true
+
+      - name: Accept Android licenses and ensure SDK components
+        run: |
+          SDK_MANAGER=""
+          for candidate in \
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then
+              SDK_MANAGER="$candidate"
+              break
+            fi
+          done
+          if [ -n "$SDK_MANAGER" ]; then
+            set +o pipefail
+            yes | "$SDK_MANAGER" --licenses > /dev/null || true
+            "$SDK_MANAGER" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+          fi
+
+      - name: Configure Android release keystore if provided
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/release-keystore.jks
+            cat > android/key.properties <<EOF
+          storeFile=release-keystore.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          fi
+
+      - name: Read app version
+        id: ver
+        run: |
+          VERSION=$(sed -nE 's/^version:\s*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml | head -n1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --release
+
+      - name: Verify APK does not request INTERNET
+        run: |
+          AAPT=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name aapt2 | sort -V | tail -n1)
+          if [ -n "$AAPT" ]; then
+            PERMS=$("$AAPT" dump permissions build/app/outputs/flutter-apk/app-release.apk)
+            echo "$PERMS"
+            if echo "$PERMS" | grep -q "android.permission.INTERNET"; then
+              echo "Unexpected INTERNET permission found in release APK!"
+              exit 1
+            fi
+          fi
+
+      - name: Prepare APK artifact
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/Pyure-${{ steps.ver.outputs.version }}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyure-android
+          path: dist/Pyure-*-android.apk
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.1"
+          cache: true
+
+      - name: Read app version
+        id: ver
+        shell: pwsh
+        run: |
+          $text = Get-Content -Raw pubspec.yaml
+          $ver = "0.1.0"
+          if ($text -match "(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)") {
+            $ver = $Matches[1]
+          }
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      - name: Build Windows installer (.exe)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & $iscc "/DMyAppVersion=${{ steps.ver.outputs.version }}" "installer\pyure.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyure-windows
+          path: dist/Pyure-*-windows-x64-setup.exe
+
+  publish-release:
+    needs: [build-android, build-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          VERSION=$(sed -nE 's/^version:\s*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml | head -n1)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=v${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Pyure ${{ steps.tag.outputs.name }}
+          body: |
+            Локальный офлайн MP3-плеер для Windows и Android (включая GrapheneOS).
+
+            Файлы:
+            - `Pyure-*-windows-x64-setup.exe` — установщик для Windows 10/11 (x64).
+            - `Pyure-*-android.apk` — универсальный APK для Android 7+ и GrapheneOS (`arm64-v8a`, `armeabi-v7a`, `x86_64`).
+          files: |
+            release-assets/*

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:material_ui/material_ui.dart' show Color;
 
 import '../../../core/models/track.dart';
 
@@ -71,6 +72,12 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'com.pyure.player.channel.audio',
           androidNotificationChannelName: 'Воспроизведение музыки',
+          androidNotificationChannelDescription:
+              'Управление воспроизведением Pyure в шторке и на экране блокировки',
+          androidNotificationIcon: 'drawable/ic_stat_pyure',
+          notificationColor: Color(0xFF18181B),
+          artDownscaleWidth: 512,
+          artDownscaleHeight: 512,
           androidNotificationOngoing: true,
           androidStopForegroundOnPause: true,
         ),
@@ -253,6 +260,17 @@ class _PyureAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> skipToPrevious() => callbacks?.onPrevious() ?? Future.value();
+
+  @override
+  Future<void> onNotificationDeleted() => callbacks?.onStop() ?? Future.value();
+
+  @override
+  Future<void> onTaskRemoved() async {
+    final isPlaying = playbackState.valueOrNull?.playing ?? false;
+    if (!isPlaying) {
+      await stop();
+    }
+  }
 }
 
 /// Заглушка [SystemMediaBridge] для тестов или неподдерживаемых сред.

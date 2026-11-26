@@ -45,6 +45,7 @@ class AlbumDetailScreen extends ConsumerWidget {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 720;
             final hPad = isWide ? 28.0 : 16.0;
+            final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
             return Scaffold(
               extendBodyBehindAppBar: true,
@@ -164,14 +165,16 @@ class AlbumDetailScreen extends ConsumerWidget {
                                       ),
                                     )
                                   else
-                                    SliverPadding(
-                                      padding: EdgeInsets.fromLTRB(
-                                        hPad - 4,
-                                        8,
-                                        hPad - 4,
-                                        24,
-                                      ),
-                                      sliver: SliverList.builder(
+                                      SliverPadding(
+                                        padding: EdgeInsets.fromLTRB(
+                                          hPad - 4,
+                                          8,
+                                          hPad - 4,
+                                          playback.hasTrack
+                                              ? 24
+                                              : 24 + bottomInset,
+                                        ),
+                                        sliver: SliverList.builder(
                                         itemCount: tracks.length,
                                         itemBuilder: (context, index) {
                                           final track = tracks[index];
@@ -204,10 +207,22 @@ class AlbumDetailScreen extends ConsumerWidget {
                             },
                           ),
                         ),
-                        if (playback.hasTrack) ...[
-                          const Divider(height: 1),
-                          MiniPlayerBar(isWide: isWide),
-                        ],
+                        if (playback.hasTrack)
+                          ColoredBox(
+                            color: pyure.miniPlayerSurface,
+                            child: SafeArea(
+                              top: false,
+                              left: false,
+                              right: false,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Divider(height: 1),
+                                  MiniPlayerBar(isWide: isWide),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

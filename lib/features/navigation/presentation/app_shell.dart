@@ -71,7 +71,14 @@ class AppShell extends ConsumerWidget {
           );
         }
 
-        return Scaffold(
+        return PopScope(
+          canPop: currentTab == AppTab.albums,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && currentTab != AppTab.albums) {
+              ref.read(navigationProvider.notifier).selectTab(AppTab.albums);
+            }
+          },
+          child: Scaffold(
           appBar: AppBar(
             title: const _BrandTitle(),
             actions: [
@@ -118,6 +125,7 @@ class AppShell extends ConsumerWidget {
                   label: tab.labelRu,
                 ),
             ],
+          ),
           ),
         );
       },

@@ -80,7 +80,7 @@ class WindowsMusicStorageSource implements MusicStorageSource {
         subDirs.add(entity);
       } else if (entity is File) {
         final nameLower = p.basename(entity.path).toLowerCase();
-        if (nameLower.endsWith('.mp3')) {
+        if (!nameLower.startsWith('._') && nameLower.endsWith('.mp3')) {
           mp3Files.add(entity);
         } else {
           final priority = _coverCandidates.indexOf(nameLower);

@@ -6,11 +6,15 @@
 .pub/
 .vscode/
 build/
+dist/
 windows/flutter/ephemeral/
 windows/flutter/generated_plugin_registrant.*
 windows/flutter/generated_plugins.cmake
 android/.gradle/
 android/local.properties
+android/key.properties
+*.jks
+*.keystore
 **/GeneratedPluginRegistrant.*
 *.iml
 *.log

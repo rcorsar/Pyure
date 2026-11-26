@@ -1,39 +1,42 @@
-# Пюре (`pyure`)
+# Pyure
 
-Бесплатный open-source офлайн MP3-плеер для **Windows 11** и **Android (GrapheneOS)**.
+Локальный офлайн MP3-плеер для Windows и Android (в том числе GrapheneOS).
+Работает только с вашей папкой на устройстве — без сети, рекламы и лишних разрешений.
 
-## Что нужно установить на чистой Windows 11
+## Что умеет
 
-1. **Flutter SDK** (Windows zip со страницы [docs.flutter.dev/get-started/install/windows/windows](https://docs.flutter.dev/get-started/install/windows/windows)):
-   - Распакуйте в `C:\src\flutter` (путь без кириллицы и пробелов).
-   - Добавьте `C:\src\flutter\bin` в переменную среды `Path`.
-2. **Visual Studio 2022 Community** (или **Visual Studio Build Tools 2022**):
-   - Обязательно отметьте рабочую нагрузку **Desktop development with C++** (*Разработка классических приложений на C++*).
-   - Проверьте окружение командой: `flutter doctor -v` (в пункте *Visual Studio* не должно быть ошибок).
-3. *(Только для последующей сборки `.apk` под Pixel 10 / GrapheneOS)*: **Android Studio** + Android SDK и `flutter doctor --android-licenses`.
+- Сканирует выбранную папку и подпапки с MP3, сохраняет библиотеку в локальный кэш.
+- Читает ID3-теги и обложки (встроенные в файл или `cover.jpg` / `folder.jpg` рядом). Если теги пустые, берёт исполнителя и название из имени файла (`Исполнитель - Трек`), а альбом — из имени папки.
+- Сортирует альбомы по исполнителю и названию (сначала латиница A–Z, затем кириллица А–Я) и треки по названию, альбому или дате добавления.
+- Мгновенно ищет по трекам, исполнителям и альбомам, помнит последний трек, позицию и громкость.
+- Работает в фоне на Android и управляется с гарнитуры, шторки уведомлений и кнопок Windows.
+- На Android открывает музыку через системный Storage Access Framework (SAF): не запрашивает доступ ко всей памяти устройства, а в релизном APK вырезано разрешение `INTERNET`.
 
-## Первый запуск на Windows 11
+## Установка
 
-Откройте PowerShell в папке проекта `r:\Desktop\Lagring2\Antigravity\pyure` и выполните:
+Готовые сборки лежат на странице [Releases](https://github.com/rcorsar/Pyure/releases):
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\bootstrap_runners.ps1
-flutter run -d windows
-```
+- **Windows (x64)**: скачайте `Pyure-<версия>-windows-x64-setup.exe` и запустите установку.
+- **Android / GrapheneOS**: скачайте `Pyure-<версия>-android.apk` и установите APK, после первого запуска выберите папку с музыкой.
 
-Скрипт [bootstrap_runners.ps1](bootstrap_runners.ps1) сгенерирует актуальные папки `windows/` и `android/`, пропишет `com.pyure.player`, применит `AndroidManifest.xml` и `MainActivity.kt` из `android_config/`, скачает зависимости и прогонит `flutter analyze` + `flutter test`.
+## Сборка из исходников
 
-## Сборка и установка как программы на Windows 11
+Нужен Flutter SDK (`>= 3.44.0`). Для сборки Windows — Visual Studio Build Tools (C++), для установщика — Inno Setup 6. Для Android — JDK 17 и Android SDK.
 
-Чтобы собрать release `.exe`, установить его в `%LOCALAPPDATA%\Programs\Pyure` и создать ярлыки в **меню Пуск** и на **Рабочем столе** (чтобы можно было закрепить в Пуске и на панели задач):
+Windows (собрать и сразу поставить в `%LOCALAPPDATA%\Programs\Pyure` с ярлыками):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install_windows.ps1
 ```
 
-## Сборка `.apk` для Android / GrapheneOS
+Windows-установщик `.exe` в папку `dist/`:
 
 ```powershell
-flutter build apk --release
+powershell -ExecutionPolicy Bypass -File .\build_windows_installer.ps1
+```
+
+Android `.apk` в папку `dist/`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_android_apk.ps1
 ```

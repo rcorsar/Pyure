@@ -395,6 +395,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('Слушать'), findsNothing);
+
+    // На мобильном устройстве системный возврат с вкладки «Треки» возвращает на «Альбомы».
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Альбомы'), findsWidgets);
+    expect(find.text('По исполнителю'), findsOneWidget);
   });
 
   testWidgets('Десктопная раскладка показывает Pyure и боковую панель', (

@@ -1,16 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Приватность GrapheneOS:
-         НЕ запрашиваем MANAGE_EXTERNAL_STORAGE и не объявляем INTERNET в релизе.
-         Для выбора папки используется SAF (saf_util/saf_stream), а READ_MEDIA_AUDIO
-         добавлено исключительно для совместимости с GrapheneOS Storage Scopes. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
-    <!-- Фоновое воспроизведение и уведомление в шторке (Android 13/14/15+) -->
+    <!-- Фоновое воспроизведение, уведомление в шторке и медиа-сессия.
+         Доступ к музыке идёт исключительно через системный Storage Access Framework (SAF),
+         поэтому приложению не нужны широкие разрешения на память устройства. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -19,7 +12,10 @@
     <application
         android:name="${applicationName}"
         android:label="Pyure"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false">
 
         <activity
             android:name=".MainActivity"

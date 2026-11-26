@@ -52,11 +52,22 @@ class AndroidSafMusicStorageSource implements MusicStorageSource {
   @override
   Future<bool> hasPersistedAccess(MusicFolderRef folder) async {
     if (!folder.isSafTree) return false;
-    return _safUtil.hasPersistedPermission(folder.uri);
+    try {
+      if (await _safUtil.hasPersistedPermission(folder.uri)) {
+        return true;
+      }
+    } catch (_) {}
+    try {
+      final stat = await _safUtil.stat(folder.uri, true);
+      return stat != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
   Future<List<ScannedAudioEntry>> listMp3Entries(MusicFolderRef folder) async {
+    await _cleanupStaleScanFiles();
     final entries = <ScannedAudioEntry>[];
     await _walkSafDir(
       dirUri: folder.uri,
@@ -65,6 +76,19 @@ class AndroidSafMusicStorageSource implements MusicStorageSource {
       out: entries,
     );
     return entries;
+  }
+
+  Future<void> _cleanupStaleScanFiles() async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      await for (final entity in tempDir.list(followLinks: false)) {
+        if (entity is File && p.basename(entity.path).startsWith('pyure_scan_')) {
+          try {
+            await entity.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _walkSafDir({
@@ -86,12 +110,15 @@ class AndroidSafMusicStorageSource implements MusicStorageSource {
     var bestCoverPriority = _coverCandidates.length;
 
     for (final doc in children) {
+      final nameLower = doc.name.toLowerCase();
       if (doc.isDir) {
+        if (nameLower.startsWith('.trashed') || nameLower == '.thumbnails') {
+          continue;
+        }
         subDirs.add(doc);
         continue;
       }
-      final nameLower = doc.name.toLowerCase();
-      if (nameLower.endsWith('.mp3')) {
+      if (!nameLower.startsWith('._') && nameLower.endsWith('.mp3')) {
         mp3Docs.add(doc);
       } else {
         final priority = _coverCandidates.indexOf(nameLower);
@@ -172,11 +199,33 @@ class AndroidSafMusicStorageSource implements MusicStorageSource {
       '${stableHexHash(sourceUri)}.mp3',
     );
     final targetFile = File(targetPath);
-    if (!await targetFile.exists()) {
-      await _safStream.copyToLocalFile(sourceUri, targetPath);
-      await _trimPlaybackCache(cacheDir, keepPath: targetPath);
+    if (await targetFile.exists()) {
+      final len = await targetFile.length();
+      if (len > 0) {
+        return targetPath;
+      }
+      try {
+        await targetFile.delete();
+      } catch (_) {}
     }
-    return targetPath;
+
+    final tempPart = File('$targetPath.part');
+    try {
+      await _safStream.copyToLocalFile(sourceUri, tempPart.path);
+      if (!await tempPart.exists() || await tempPart.length() == 0) {
+        throw const FileSystemException('Empty audio copy from SAF');
+      }
+      await tempPart.rename(targetPath);
+      await _trimPlaybackCache(cacheDir, keepPath: targetPath);
+      return targetPath;
+    } catch (_) {
+      if (await tempPart.exists()) {
+        try {
+          await tempPart.delete();
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   Future<void> _trimPlaybackCache(

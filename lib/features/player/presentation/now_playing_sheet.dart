@@ -72,10 +72,11 @@ class NowPlayingSheet extends ConsumerWidget {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final isWide = constraints.maxWidth >= 720;
-                    final artSize = (constraints.maxHeight * 0.36).clamp(
-                      180.0,
-                      320.0,
-                    );
+                    final isCompactHeight = constraints.maxHeight < 660;
+                    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+                    final artSize = isCompactHeight
+                        ? (constraints.maxHeight * 0.28).clamp(110.0, 180.0)
+                        : (constraints.maxHeight * 0.34).clamp(160.0, 320.0);
 
                     return Center(
                       child: ConstrainedBox(
@@ -85,7 +86,7 @@ class NowPlayingSheet extends ConsumerWidget {
                             isWide ? 32 : 24,
                             12,
                             isWide ? 32 : 24,
-                            28,
+                            28 + bottomInset,
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,

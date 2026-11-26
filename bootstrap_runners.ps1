@@ -36,6 +36,13 @@ try {
         (Join-Path $projectRoot "android_config\AndroidManifest.xml") `
         (Join-Path $projectRoot "android\app\src\main\AndroidManifest.xml")
 
+    $releaseManifestSrc = Join-Path $projectRoot "android_config\release\AndroidManifest.xml"
+    if (Test-Path $releaseManifestSrc) {
+        $releaseManifestDir = Join-Path $projectRoot "android\app\src\release"
+        New-Item -ItemType Directory -Force -Path $releaseManifestDir | Out-Null
+        Copy-Item -Force $releaseManifestSrc (Join-Path $releaseManifestDir "AndroidManifest.xml")
+    }
+
     $customRes = Join-Path $projectRoot "android_config\res"
     if (Test-Path $customRes) {
         Copy-Item -Recurse -Force `

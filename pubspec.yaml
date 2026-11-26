@@ -1,5 +1,5 @@
 name: pyure
-description: "Пюре — офлайн MP3-плеер для Windows и Android (GrapheneOS)."
+description: "Pyure — offline MP3 player for Windows and Android (GrapheneOS)."
 publish_to: "none"
 version: 0.1.0+1
 

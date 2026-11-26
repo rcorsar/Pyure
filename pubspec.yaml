@@ -1,0 +1,52 @@
+name: pyure
+description: "Пюре — офлайн MP3-плеер для Windows и Android (GrapheneOS)."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.11.0
+
+  # State management (clean Notifier/AsyncNotifier without codegen)
+  flutter_riverpod: ^3.5.0
+
+  # Cross-platform audio engine (libmpv audio-only binaries)
+  media_kit: ^1.2.6
+  media_kit_libs_audio: ^1.0.7
+
+  # Background playback, media notifications, and hardware/SMTC keys
+  audio_service: ^0.18.19
+  audio_service_win: ^0.1.0
+  audio_session: ^0.2.4
+
+  # Pure-Dart ID3 and audio metadata parser
+  audio_metadata_reader: ^1.8.0
+
+  # Local SQLite cache (Android + Windows FFI)
+  sqflite: ^2.4.6
+  sqflite_common_ffi: ^2.4.7
+
+  # Folder picking & Android SAF (GrapheneOS Storage Scopes friendly, no MANAGE_EXTERNAL_STORAGE)
+  file_picker: ^13.4.1
+  saf_util: ^3.1.1
+  saf_stream: ^4.0.3
+
+  # Paths and lightweight preferences
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  shared_preferences: ^2.5.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/album_bg.jpg

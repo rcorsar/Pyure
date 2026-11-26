@@ -1,0 +1,372 @@
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../app/theme/pyure_theme.dart';
+import '../../../core/models/album.dart';
+import '../../../core/models/album_sort_order.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/smooth_scroll.dart';
+import 'album_detail_screen.dart';
+import 'library_provider.dart';
+import 'widgets/artwork_box.dart';
+
+/// Вкладка «Альбомы»: сетка плиток (2 колонки на Android, адаптивно на Windows).
+class AlbumsTab extends ConsumerWidget {
+  const AlbumsTab({super.key});
+
+  void _openAlbum(BuildContext context, Album album) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => AlbumDetailScreen(album: album),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final pyure = context.pyureTheme;
+    final lib = ref.watch(libraryProvider);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 600;
+        final hPad = isWide ? 28.0 : 16.0;
+
+        return SmoothScrollArea(
+          thumbVisibility: isWide,
+          builder: (context, controller) {
+            return CustomScrollView(
+              key: const PageStorageKey<String>('albums_scroll'),
+              controller: controller,
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(hPad, isWide ? 24 : 16, hPad, 14),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Альбомы',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          lib.albums.isEmpty
+                              ? (lib.selectedFolder?.displayName ??
+                                    'Папка не выбрана')
+                              : '${lib.albums.length} альб. • '
+                                    '${formatTrackCount(lib.tracks.length)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: pyure.subtleText,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    if (lib.albums.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final order in AlbumSortOrder.values) ...[
+                              ChoiceChip(
+                                label: Text(order.labelRu),
+                                selected: lib.albumSortOrder == order,
+                                onSelected: (_) => ref
+                                    .read(libraryProvider.notifier)
+                                    .setAlbumSortOrder(order),
+                              ),
+                              if (order != AlbumSortOrder.values.last)
+                                const SizedBox(width: 8),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (lib.isScanning) ...[
+                      const SizedBox(height: 14),
+                      _ScanProgressCard(lib: lib),
+                    ],
+                    if (lib.errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      _ErrorBanner(message: lib.errorMessage!),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (lib.isInitialLoading && lib.albums.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (lib.albums.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: hPad),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.14,
+                                  ),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Icon(
+                                  Icons.album_rounded,
+                                  size: 34,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                lib.selectedFolder == null
+                                    ? 'Выберите папку с музыкой'
+                                    : 'MP3-файлы не найдены',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                lib.selectedFolder == null
+                                    ? 'Укажите папку с MP3-файлами (включая '
+                                          'подпапки). Теги, обложки и кэш '
+                                          'хранятся локально.'
+                                    : 'В выбранной папке «${lib.selectedFolder!.displayName}» '
+                                          'не найдено MP3-треков. Выберите другую папку '
+                                          'или обновите библиотеку.',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: pyure.subtleText,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 20),
+                              FilledButton.icon(
+                                onPressed: lib.isScanning
+                                    ? null
+                                    : () => ref
+                                          .read(libraryProvider.notifier)
+                                          .pickFolderAndScan(),
+                                icon: const Icon(Icons.folder_open_rounded),
+                                label: const Text('Выбрать папку с музыкой'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
+                sliver: SliverGrid(
+                  gridDelegate: isWide
+                      ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 210,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.72,
+                        )
+                      : const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.68,
+                        ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final album = lib.albums[index];
+                      return RepaintBoundary(
+                        child: _AlbumTile(
+                          album: album,
+                          onTap: () => _openAlbum(context, album),
+                        ),
+                      );
+                    },
+                    childCount: lib.albums.length,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+      },
+    );
+  }
+}
+
+class _AlbumTile extends StatelessWidget {
+  const _AlbumTile({required this.album, required this.onTap});
+
+  final Album album;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pyure = context.pyureTheme;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ArtworkBox(
+                artworkPath: album.artworkPath,
+                borderRadius: 10,
+                iconSize: 40,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                album.title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                album.artist,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: pyure.subtleText,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Spacer(),
+              Text(
+                formatTrackCount(album.trackCount),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.85),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScanProgressCard extends StatelessWidget {
+  const _ScanProgressCard({required this.lib});
+
+  final LibraryState lib;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pyure = context.pyureTheme;
+    final label = lib.scanTotal > 0
+        ? 'Сканирование: ${lib.scanProcessed} из ${lib.scanTotal}'
+        : 'Поиск MP3-файлов...';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (lib.scanTotal > 0)
+                  Text(
+                    '${((lib.scanFraction ?? 0) * 100).round()}%',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+              ],
+            ),
+            if (lib.currentScanFile.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                lib.currentScanFile,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: pyure.subtleText,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(value: lib.scanFraction),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.error.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.error.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: theme.colorScheme.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

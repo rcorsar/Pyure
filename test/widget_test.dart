@@ -816,6 +816,66 @@ void main() {
     expect(guard.events, containsAllInOrder(['start:Music', 'stop']));
     expect(container.read(libraryProvider).isScanning, isFalse);
   });
+
+  test('ArtworkBox.resolveCacheWidth разделяет ключи сетки и детального экрана', () {
+    expect(ArtworkBox.resolveCacheWidth(null), 256);
+    expect(ArtworkBox.resolveCacheWidth(46), 128);
+    expect(ArtworkBox.resolveCacheWidth(180), 360);
+    expect(ArtworkBox.resolveCacheWidth(200), 400);
+    expect(ArtworkBox.resolveCacheWidth(320), 512);
+  });
+
+  testWidgets('ArtworkBox корректно декодирует 10+ разных обложек через очередь', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync('pyure_queue_art_');
+    const pngBytes = <int>[
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+      0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+      0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0xF0,
+      0x1F, 0x00, 0x05, 0x00, 0x01, 0xFF, 0x89, 0x99,
+      0x3D, 0x1D, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+      0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    try {
+      final paths = <String>[];
+      for (var i = 0; i < 12; i++) {
+        final f = File('${tempDir.path}${Platform.pathSeparator}c_$i.png');
+        f.writeAsBytesSync(pngBytes);
+        paths.add(f.path);
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: PyureTheme.dark(),
+          home: Scaffold(
+            body: Wrap(
+              children: [
+                for (final path in paths)
+                  ArtworkBox(artworkPath: path, size: 80),
+              ],
+            ),
+          ),
+        ),
+      );
+      for (
+        var i = 0;
+        i < 30 && find.byType(RawImage).evaluate().length < 12;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump();
+      }
+      expect(find.byType(RawImage), findsNWidgets(12));
+    } finally {
+      tempDir.deleteSync(recursive: true);
+    }
+  });
 }
 
 class _SpyBackgroundScanGuard implements BackgroundScanGuard {

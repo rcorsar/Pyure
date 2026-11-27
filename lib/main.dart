@@ -32,8 +32,8 @@ Future<void> main() async {
   final isDesktop =
       !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
   PaintingBinding.instance.imageCache
-    ..maximumSize = isDesktop ? 2000 : 1000
-    ..maximumSizeBytes = (isDesktop ? 192 : 112) << 20;
+    ..maximumSize = isDesktop ? 2500 : 1200
+    ..maximumSizeBytes = (isDesktop ? 384 : 192) << 20;
   MediaKit.ensureInitialized();
   initDesktopDatabaseIfNeeded();
 

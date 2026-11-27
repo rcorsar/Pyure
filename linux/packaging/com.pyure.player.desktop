@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Pyure
+GenericName=Offline MP3 Player
+Comment=Локальный офлайн MP3-плеер
+Exec=/usr/bin/pyure %U
+Icon=pyure
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=com.pyure.player

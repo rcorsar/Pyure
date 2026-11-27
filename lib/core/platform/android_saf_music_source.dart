@@ -112,7 +112,11 @@ class AndroidSafMusicStorageSource implements MusicStorageSource {
     for (final doc in children) {
       final nameLower = doc.name.toLowerCase();
       if (doc.isDir) {
-        if (nameLower.startsWith('.trashed') || nameLower == '.thumbnails') {
+        if (nameLower.startsWith('.trashed') ||
+            nameLower == '.trash' ||
+            nameLower == '.trashes' ||
+            nameLower == '.thumbnails' ||
+            nameLower == 'lost+found') {
           continue;
         }
         subDirs.add(doc);

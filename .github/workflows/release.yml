@@ -77,21 +77,23 @@ jobs:
       - run: flutter test
       - run: flutter build apk --release
 
-      - name: Verify APK permissions and resources
+      - name: Verify APK permissions, ABIs, and resources
         run: |
           AAPT=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name aapt2 | sort -V | tail -n1)
+          APK="build/app/outputs/flutter-apk/app-release.apk"
           if [ -n "$AAPT" ]; then
-            APK="build/app/outputs/flutter-apk/app-release.apk"
             PERMS=$("$AAPT" dump permissions "$APK")
             echo "$PERMS"
             if echo "$PERMS" | grep -q "android.permission.INTERNET"; then
               echo "Unexpected INTERNET permission found in release APK!"
               exit 1
             fi
-            RES_LIST=$("$AAPT" dump resources "$APK" | grep -E "drawable/ic_stat_pyure|drawable/audio_service_play_arrow|mipmap/ic_launcher_background|mipmap/ic_launcher_foreground|mipmap/ic_launcher_monochrome" || true)
+            RES_LIST=$("$AAPT" dump resources "$APK" | grep -E "drawable/ic_stat_pyure|drawable/splash_icon|drawable/splash_icon_legacy|drawable/audio_service_play_arrow|mipmap/ic_launcher_background|mipmap/ic_launcher_foreground|mipmap/ic_launcher_monochrome" || true)
             echo "$RES_LIST"
             for required in \
               "drawable/ic_stat_pyure" \
+              "drawable/splash_icon" \
+              "drawable/splash_icon_legacy" \
               "drawable/audio_service_play_arrow" \
               "mipmap/ic_launcher_background" \
               "mipmap/ic_launcher_foreground" \
@@ -102,6 +104,13 @@ jobs:
               fi
             done
           fi
+          APK_FILES=$(unzip -l "$APK")
+          for abi in "arm64-v8a" "armeabi-v7a" "x86_64"; do
+            if ! echo "$APK_FILES" | grep -q "lib/$abi/libmpv.so"; then
+              echo "Missing libmpv.so for ABI $abi"
+              exit 1
+            fi
+          done
 
       - name: Prepare APK artifact
         run: |
@@ -130,7 +139,7 @@ jobs:
         shell: pwsh
         run: |
           $text = Get-Content -Raw pubspec.yaml
-          $ver = "0.1.0"
+          $ver = "0.1.1"
           if ($text -match "(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)") {
             $ver = $Matches[1]
           }
@@ -138,6 +147,11 @@ jobs:
 
       - run: flutter pub get
       - run: flutter build windows --release
+
+      - name: Verify bundled MSVC runtime libraries
+        shell: pwsh
+        run: |
+          Get-ChildItem "build\windows\x64\runner\Release" | Select-Object Name,Length
 
       - name: Build Windows installer (.exe)
         shell: pwsh
@@ -156,8 +170,55 @@ jobs:
           name: pyure-windows
           path: dist/Pyure-*-windows-x64-setup.exe
 
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libmpv-dev \
+            rpm fakeroot dpkg libarchive-tools zstd desktop-file-utils
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.1"
+          cache: true
+
+      - name: Read app version
+        id: ver
+        run: |
+          VERSION=$(sed -nE 's/^version:\s*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml | head -n1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - run: flutter pub get
+      - run: flutter build linux --release
+
+      - name: Package Linux releases (.deb, .rpm, .pkg.tar.zst, .tar.gz)
+        run: |
+          sed -i 's/\r$//' linux/packaging/*.sh linux/packaging/*.desktop
+          chmod +x linux/packaging/package_linux.sh linux/packaging/install.sh
+          ./linux/packaging/package_linux.sh "${{ steps.ver.outputs.version }}" "build/linux/x64/release/bundle" "dist"
+          dpkg-deb -I "dist/Pyure-${{ steps.ver.outputs.version }}-linux-x64.deb"
+          rpm -qp --requires "dist/Pyure-${{ steps.ver.outputs.version }}-linux-x64.rpm"
+          zstd -t "dist/Pyure-${{ steps.ver.outputs.version }}-linux-x64.pkg.tar.zst"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyure-linux
+          path: |
+            dist/Pyure-*-linux-x64.deb
+            dist/Pyure-*-linux-x64.rpm
+            dist/Pyure-*-linux-x64.pkg.tar.zst
+            dist/Pyure-*-linux-x64.tar.gz
+
   publish-release:
-    needs: [build-android, build-windows]
+    needs: [build-android, build-windows, build-linux]
     runs-on: ubuntu-latest
 
     steps:
@@ -186,10 +247,14 @@ jobs:
           tag_name: ${{ steps.tag.outputs.name }}
           name: Pyure ${{ steps.tag.outputs.name }}
           body: |
-            Локальный офлайн MP3-плеер для Windows и Android (включая GrapheneOS).
+            Локальный офлайн MP3-плеер для Android (GrapheneOS, Samsung, Honor, Xiaomi, Redmi), Windows 10/11 и Linux (Debian, Ubuntu, Arch Linux, Fedora).
 
             Файлы:
-            - `Pyure-*-windows-x64-setup.exe` — установщик для Windows 10/11 (x64).
-            - `Pyure-*-android.apk` — универсальный APK для Android 7+ и GrapheneOS (`arm64-v8a`, `armeabi-v7a`, `x86_64`).
+            - `Pyure-*-android.apk` — универсальный APK для Android 7+ (GrapheneOS, Samsung, Honor, Xiaomi, Redmi; `arm64-v8a`, `armeabi-v7a`, `x86_64`).
+            - `Pyure-*-windows-x64-setup.exe` — установщик для Windows 10 и Windows 11 (x64).
+            - `Pyure-*-linux-x64.deb` — пакет для Debian и Ubuntu (`sudo apt install ./Pyure-*.deb`).
+            - `Pyure-*-linux-x64.rpm` — пакет для Fedora (`sudo dnf install ./Pyure-*.rpm`).
+            - `Pyure-*-linux-x64.pkg.tar.zst` — пакет для Arch Linux (`sudo pacman -U ./Pyure-*.pkg.tar.zst`).
+            - `Pyure-*-linux-x64.tar.gz` — портативный архив для Linux (`bash install.sh`).
           files: |
             release-assets/*

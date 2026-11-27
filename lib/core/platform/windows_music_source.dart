@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -6,7 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'music_source.dart';
 
-/// Реализация [MusicStorageSource] для Windows (и других десктопных ФС).
+/// Реализация [MusicStorageSource] для десктопных ОС (Windows и Linux).
 class WindowsMusicStorageSource implements MusicStorageSource {
   static const List<String> _coverCandidates = [
     'cover.jpg',
@@ -19,13 +20,22 @@ class WindowsMusicStorageSource implements MusicStorageSource {
 
   @override
   Future<MusicFolderRef?> pickMusicFolder() async {
-    final uri = await FilePicker.pickDirectory(
-      dialogTitle: 'Выберите папку с музыкой',
-    );
-    if (uri == null) return null;
+    String? rawPath;
+    try {
+      final uri = await FilePicker.pickDirectory(
+        dialogTitle: 'Выберите папку с музыкой',
+      );
+      if (uri == null) return null;
+      rawPath = uri.scheme == 'file' || !uri.hasScheme
+          ? uri.toFilePath(windows: Platform.isWindows)
+          : uri.path;
+    } catch (e) {
+      if (!Platform.isLinux) rethrow;
+      rawPath = await _pickLinuxDirectoryFallback();
+      if (rawPath == null) return null;
+    }
 
-    final dirPath = uri.toFilePath(windows: Platform.isWindows);
-    final normalized = p.normalize(dirPath);
+    final normalized = p.normalize(rawPath);
     final name = p.basename(normalized).isEmpty
         ? normalized
         : p.basename(normalized);
@@ -35,6 +45,65 @@ class WindowsMusicStorageSource implements MusicStorageSource {
       displayName: name,
       isSafTree: false,
     );
+  }
+
+  /// Запасной выбор папки на Linux, если `xdg-desktop-portal` недоступен.
+  Future<String?> _pickLinuxDirectoryFallback() async {
+    final home = Platform.environment['HOME'];
+    final candidates = <({String exe, List<String> args})>[
+      (
+        exe: 'zenity',
+        args: const [
+          '--file-selection',
+          '--directory',
+          '--title=Выберите папку с музыкой',
+        ],
+      ),
+      (
+        exe: 'kdialog',
+        args: [
+          '--getexistingdirectory',
+          if (home != null && home.isNotEmpty) home else '/',
+          '--title',
+          'Выберите папку с музыкой',
+        ],
+      ),
+      (
+        exe: 'yad',
+        args: const [
+          '--file',
+          '--directory',
+          '--title=Выберите папку с музыкой',
+        ],
+      ),
+    ];
+
+    var foundAnyTool = false;
+    for (final candidate in candidates) {
+      try {
+        final result = await Process.run(
+          candidate.exe,
+          candidate.args,
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        );
+        foundAnyTool = true;
+        if (result.exitCode == 0) {
+          final picked = (result.stdout as String).trim();
+          if (picked.isNotEmpty) return picked;
+        }
+        return null;
+      } on ProcessException {
+        // Пробуем следующий диалог (zenity -> kdialog -> yad).
+      }
+    }
+
+    if (!foundAnyTool) {
+      throw const FileSystemException(
+        'Не найден диалог выбора папки (установите xdg-desktop-portal или zenity/kdialog)',
+      );
+    }
+    return null;
   }
 
   @override
@@ -76,10 +145,16 @@ class WindowsMusicStorageSource implements MusicStorageSource {
     var bestCoverPriority = _coverCandidates.length;
 
     for (final entity in children) {
+      final baseLower = p.basename(entity.path).toLowerCase();
       if (entity is Directory) {
+        if (baseLower.startsWith('.trash') ||
+            baseLower == '.thumbnails' ||
+            baseLower == 'lost+found') {
+          continue;
+        }
         subDirs.add(entity);
       } else if (entity is File) {
-        final nameLower = p.basename(entity.path).toLowerCase();
+        final nameLower = baseLower;
         if (!nameLower.startsWith('._') && nameLower.endsWith('.mp3')) {
           mp3Files.add(entity);
         } else {

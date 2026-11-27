@@ -20,6 +20,7 @@ import 'package:pyure/features/library/data/metadata_fallback_resolver.dart';
 import 'package:pyure/features/library/presentation/library_provider.dart';
 import 'package:pyure/features/player/data/audio_playback_backend.dart';
 import 'package:pyure/features/player/data/system_media_bridge.dart';
+import 'package:pyure/features/player/presentation/now_playing_sheet.dart';
 import 'package:pyure/features/player/presentation/player_provider.dart';
 
 class _FakeAppDatabase implements AppDatabase {
@@ -122,6 +123,11 @@ class _FakePlaybackBackend implements AudioPlaybackBackend {
   final _duration = StreamController<Duration>.broadcast();
   final _completed = StreamController<bool>.broadcast();
 
+  bool currentPlaying = false;
+  int playCalls = 0;
+  int pauseCalls = 0;
+  final List<(String source, bool play)> openCalls = [];
+
   @override
   Stream<bool> get playingStream => _playing.stream;
   @override
@@ -131,19 +137,37 @@ class _FakePlaybackBackend implements AudioPlaybackBackend {
   @override
   Stream<bool> get completedStream => _completed.stream;
 
-  @override
-  Future<void> open(String source, {required bool play}) async {
-    _playing.add(play);
+  void _setPlaying(bool value) {
+    currentPlaying = value;
+    _playing.add(value);
   }
 
   @override
-  Future<void> pause() async => _playing.add(false);
+  Future<void> open(String source, {required bool play}) async {
+    openCalls.add((source, play));
+    _setPlaying(play);
+  }
 
   @override
-  Future<void> play() async => _playing.add(true);
+  Future<void> pause() async {
+    pauseCalls += 1;
+    _setPlaying(false);
+  }
 
   @override
-  Future<void> playOrPause() async => _playing.add(true);
+  Future<void> play() async {
+    playCalls += 1;
+    _setPlaying(true);
+  }
+
+  @override
+  Future<void> playOrPause() async {
+    if (currentPlaying) {
+      await pause();
+    } else {
+      await play();
+    }
+  }
 
   @override
   Future<void> seek(Duration position) async => _position.add(position);
@@ -487,4 +511,106 @@ void main() {
     expect(y4, greaterThan(y1));
     expect(find.text('1 трек'), findsNothing);
   });
+
+  testWidgets(
+    'Кнопка паузы в NowPlayingSheet показывает паузу сразу после старта трека и срабатывает с первого нажатия',
+    (tester) async {
+      final sampleTracks = [
+        const Track(
+          id: 1,
+          title: 'Numb',
+          artist: 'Linkin Park',
+          album: 'Meteora',
+          albumKey: 'lp:meteora',
+          sourceUri: 'sample://lp_numb.mp3',
+          folderUri: 'sample://root',
+          parentFolderName: 'Meteora',
+          durationMs: 185000,
+          addedAtEpochMs: 1000,
+          fileSizeBytes: 5000,
+          lastModifiedMs: 1000,
+        ),
+        const Track(
+          id: 2,
+          title: 'Faint',
+          artist: 'Linkin Park',
+          album: 'Meteora',
+          albumKey: 'lp:meteora',
+          sourceUri: 'sample://lp_faint.mp3',
+          folderUri: 'sample://root',
+          parentFolderName: 'Meteora',
+          durationMs: 162000,
+          addedAtEpochMs: 1001,
+          fileSizeBytes: 4800,
+          lastModifiedMs: 1001,
+        ),
+      ];
+
+      // Восстанавливаем прошлый трек (при старте open(..., play: false)).
+      SharedPreferences.setMockInitialValues({
+        'last_track_id': 2,
+        'last_track_uri': 'sample://lp_faint.mp3',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final fakeBackend = _FakePlaybackBackend();
+      addTearDown(fakeBackend.dispose);
+
+      tester.view.physicalSize = const Size(412, 915);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appPreferencesProvider.overrideWithValue(AppPreferences(prefs)),
+            appDatabaseProvider.overrideWithValue(
+              _FakeAppDatabase(sampleTracks),
+            ),
+            musicStorageSourceProvider.overrideWithValue(
+              _FakeMusicStorageSource(),
+            ),
+            audioPlaybackBackendProvider.overrideWithValue(fakeBackend),
+            systemMediaBridgeProvider.overrideWithValue(
+              NoopSystemMediaBridge(),
+            ),
+          ],
+          child: const PyureApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Заходим в альбом и включаем первый трек.
+      await tester.tap(find.text('Meteora'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Numb'));
+      await tester.pumpAndSettle();
+
+      // Открываем экран трека (NowPlayingSheet) по тапу на мини-плеер.
+      await tester.tap(find.text('Numb').last);
+      await tester.pumpAndSettle();
+      expect(find.text('СЕЙЧАС ИГРАЕТ'), findsOneWidget);
+
+      // Кнопка сразу должна показывать "Пауза", а не "Воспроизвести".
+      final pauseBtnInSheet = find.descendant(
+        of: find.byType(NowPlayingSheet),
+        matching: find.byTooltip('Пауза'),
+      );
+      expect(pauseBtnInSheet, findsOneWidget);
+
+      final pauseBefore = fakeBackend.pauseCalls;
+      await tester.tap(pauseBtnInSheet);
+      await tester.pumpAndSettle();
+
+      // Пауза должна сработать с первого же нажатия (pause() ровно +1 раз).
+      expect(fakeBackend.pauseCalls, pauseBefore + 1);
+      expect(fakeBackend.currentPlaying, isFalse);
+      expect(
+        find.descendant(
+          of: find.byType(NowPlayingSheet),
+          matching: find.byTooltip('Воспроизвести'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

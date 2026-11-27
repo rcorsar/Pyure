@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -67,6 +68,9 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
   bool _suppressedUntilPlayback = false;
 
   static Future<SystemMediaBridge> initialize() async {
+    if (Platform.isLinux) {
+      return NoopSystemMediaBridge();
+    }
     try {
       final handler = await AudioService.init(
         builder: _PyureAudioHandler.new,

@@ -155,8 +155,11 @@ class LibraryNotifier extends Notifier<LibraryState> {
       await _runScan(folder);
     } catch (e) {
       if (!ref.mounted) return;
+      final hint = defaultTargetPlatform == TargetPlatform.android
+          ? ' Выберите конкретную папку с музыкой (например Music), а не корень памяти.'
+          : '';
       state = state.copyWith(
-        errorMessage: 'Не удалось выбрать папку: $e',
+        errorMessage: 'Не удалось выбрать папку: $e$hint',
       );
     }
   }

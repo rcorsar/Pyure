@@ -1,0 +1,24 @@
+pkgname=pyure
+pkgver=0.1.1
+pkgrel=1
+pkgdesc="Local offline MP3 player"
+arch=('x86_64')
+url="https://github.com/rcorsar/Pyure"
+license=('MIT')
+depends=('gtk3' 'mpv' 'xdg-desktop-portal')
+optdepends=(
+  'zenity: fallback folder picker dialog'
+  'kdialog: KDE fallback folder picker dialog'
+)
+source=("Pyure-${pkgver}-linux-x64.tar.gz::https://github.com/rcorsar/Pyure/releases/download/v${pkgver}/Pyure-${pkgver}-linux-x64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}/pyure-${pkgver}-linux-x64"
+  install -dm755 "${pkgdir}/opt/pyure" "${pkgdir}/usr/bin"
+  cp -a . "${pkgdir}/opt/pyure/"
+  chmod 755 "${pkgdir}/opt/pyure/pyure"
+  ln -sfn /opt/pyure/pyure "${pkgdir}/usr/bin/pyure"
+  install -Dm644 com.pyure.player.desktop "${pkgdir}/usr/share/applications/com.pyure.player.desktop"
+  install -Dm644 pyure.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/pyure.png"
+}

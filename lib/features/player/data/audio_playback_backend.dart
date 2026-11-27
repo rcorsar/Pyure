@@ -28,14 +28,26 @@ class MediaKitPlaybackBackend implements AudioPlaybackBackend {
           bufferSize: 4 * 1024 * 1024,
         ),
       ) {
+    _playerPlayingSub = _player.stream.playing.listen(_emitPlaying);
     if (Platform.isAndroid) {
       _androidAudioInit = _configureAndroidAudioPipeline();
     }
   }
 
   final Player _player;
+  final StreamController<bool> _playingController =
+      StreamController<bool>.broadcast();
+  StreamSubscription<bool>? _playerPlayingSub;
   Future<void>? _androidAudioInit;
   bool _hasOpenedInitialMedia = false;
+  bool _isPlaying = false;
+
+  void _emitPlaying(bool playing) {
+    if (_playingController.isClosed) return;
+    if (_isPlaying == playing) return;
+    _isPlaying = playing;
+    _playingController.add(playing);
+  }
 
   Future<void> _configureAndroidAudioPipeline() async {
     try {
@@ -63,7 +75,7 @@ class MediaKitPlaybackBackend implements AudioPlaybackBackend {
   }
 
   @override
-  Stream<bool> get playingStream => _player.stream.playing;
+  Stream<bool> get playingStream => _playingController.stream;
 
   @override
   Stream<Duration> get positionStream => _player.stream.position;
@@ -80,28 +92,45 @@ class MediaKitPlaybackBackend implements AudioPlaybackBackend {
     if (Platform.isAndroid && _hasOpenedInitialMedia) {
       final platform = _player.platform;
       if (platform is NativePlayer) {
-        // Меняем файл на лету через `loadfile replace` без `stop()`,
-        // чтобы не разрушать активный foreground AudioTrack в фоне.
+        // Включаем обработку START_FILE / pause / eof-reached до loadfile,
+        // чтобы media_kit синхронизировал playing/completed без вызова stop().
+        platform.isPlayingStateChangeAllowed = play;
         await platform.command(['loadfile', source, 'replace']);
         await platform.setProperty('pause', play ? 'no' : 'yes');
+        platform.state = platform.state.copyWith(
+          playing: play,
+          completed: false,
+        );
+        _emitPlaying(play);
         return;
       }
     }
     _hasOpenedInitialMedia = true;
-    return _player.open(Media(source), play: play);
+    await _player.open(Media(source), play: play);
+    _emitPlaying(play);
   }
 
   @override
   Future<void> play() async {
     await _ensureAndroidConfigured();
-    return _player.play();
+    await _player.play();
+    _emitPlaying(true);
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    await _player.pause();
+    _emitPlaying(false);
+  }
 
   @override
-  Future<void> playOrPause() => _player.playOrPause();
+  Future<void> playOrPause() async {
+    if (_isPlaying || _player.state.playing) {
+      await pause();
+    } else {
+      await play();
+    }
+  }
 
   @override
   Future<void> seek(Duration position) => _player.seek(position);
@@ -113,5 +142,9 @@ class MediaKitPlaybackBackend implements AudioPlaybackBackend {
   }
 
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    await _playerPlayingSub?.cancel();
+    await _playingController.close();
+    await _player.dispose();
+  }
 }

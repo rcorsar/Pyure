@@ -37,7 +37,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
   int _lastPersistedPositionTimeMs = 0;
   int _lastUiPositionTimeMs = 0;
+  int _transitionGeneration = 0;
   bool _isTransitioning = false;
+  bool _isOpeningBackend = false;
+  bool _pauseRequestedDuringLoad = false;
   bool _pausedByInterruption = false;
 
   AudioPlaybackBackend get _backend => ref.read(audioPlaybackBackendProvider);
@@ -116,9 +119,9 @@ class PlayerNotifier extends Notifier<PlayerState> {
     _subscriptions.add(
       _backend.playingStream.listen((playing) {
         if (!ref.mounted) return;
-        if (!playing && _isTransitioning) {
-          // Не сбрасываем состояние воспроизведения в системной шторке на паузу
-          // во время переключения трека, пока загружается следующий файл.
+        if (!playing && _isOpeningBackend) {
+          // Не сбрасываем состояние воспроизведения на паузу, пока MediaKit
+          // выполняет внутренний stop/load при открытии файла.
           return;
         }
         if (playing) {
@@ -201,7 +204,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
       final allTracks = await db.getAllTracks(
         sortOrder: prefs.getTrackSortOrder(),
       );
-      if (!ref.mounted) return;
+      if (!ref.mounted || _transitionGeneration > 0) return;
 
       final queue = allTracks.isNotEmpty
           ? List<Track>.unmodifiable(allTracks)
@@ -230,9 +233,15 @@ class PlayerNotifier extends Notifier<PlayerState> {
       final playable = await ref
           .read(musicStorageSourceProvider)
           .resolvePlayableSource(track.sourceUri);
-      if (!ref.mounted) return;
+      if (!ref.mounted || _transitionGeneration > 0) return;
 
-      await _backend.open(playable, play: false);
+      _isOpeningBackend = true;
+      try {
+        await _backend.open(playable, play: false);
+      } finally {
+        _isOpeningBackend = false;
+      }
+      if (!ref.mounted || _transitionGeneration > 0) return;
       if (restoredPos > Duration.zero) {
         await _backend.seek(restoredPos);
       }
@@ -256,10 +265,22 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
   Future<void> togglePlayPause() async {
     if (!state.hasTrack) return;
-    if (!state.isPlaying) {
+    if (state.isPlaying) {
+      if (_isTransitioning) {
+        _pauseRequestedDuringLoad = true;
+        state = state.copyWith(isPlaying: false);
+        unawaited(_syncMediaBridgeState());
+      }
+      await _backend.pause();
+    } else {
+      if (_isTransitioning) {
+        _pauseRequestedDuringLoad = false;
+        state = state.copyWith(isPlaying: true);
+        unawaited(_syncMediaBridgeState());
+      }
       await _mediaBridge.activateAudioSession();
+      await _backend.play();
     }
-    await _backend.playOrPause();
   }
 
   Future<void> seek(Duration position) async {
@@ -338,7 +359,9 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
   Future<void> _loadAndPlayIndex(int index, {required bool autoplay}) async {
     if (index < 0 || index >= state.queue.length) return;
+    final myGen = ++_transitionGeneration;
     _isTransitioning = true;
+    _pauseRequestedDuringLoad = !autoplay;
     final track = state.queue[index];
     final initialDur = track.durationMs > 0
         ? Duration(milliseconds: track.durationMs)
@@ -347,6 +370,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     _lastUiPositionTimeMs = 0;
     state = state.copyWith(
       currentIndex: index,
+      isPlaying: autoplay,
       isLoadingTrack: true,
       position: Duration.zero,
       duration: initialDur,
@@ -364,14 +388,23 @@ class PlayerNotifier extends Notifier<PlayerState> {
       final playable = await ref
           .read(musicStorageSourceProvider)
           .resolvePlayableSource(track.sourceUri);
-      if (!ref.mounted) return;
+      if (!ref.mounted || myGen != _transitionGeneration) return;
 
-      await _backend.open(playable, play: autoplay);
-      if (!ref.mounted) return;
+      final shouldPlay = !_pauseRequestedDuringLoad;
+      _isOpeningBackend = true;
+      try {
+        await _backend.open(playable, play: shouldPlay);
+      } finally {
+        _isOpeningBackend = false;
+      }
+      if (!ref.mounted || myGen != _transitionGeneration) return;
 
-      state = state.copyWith(isLoadingTrack: false);
+      state = state.copyWith(
+        isLoadingTrack: false,
+        isPlaying: shouldPlay,
+      );
       await _syncMediaBridgeState();
-      if (autoplay) {
+      if (shouldPlay) {
         unawaited(_precacheNextTrack(index));
       }
       await ref
@@ -382,7 +415,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
             positionMs: 0,
           );
     } catch (e) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || myGen != _transitionGeneration) return;
       state = state.copyWith(
         isLoadingTrack: false,
         isPlaying: false,
@@ -390,7 +423,9 @@ class PlayerNotifier extends Notifier<PlayerState> {
       );
       await _syncMediaBridgeState();
     } finally {
-      _isTransitioning = false;
+      if (myGen == _transitionGeneration) {
+        _isTransitioning = false;
+      }
     }
   }
 

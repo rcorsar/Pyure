@@ -8,8 +8,8 @@ $projectRoot = $PSScriptRoot
 $tmpDir = Join-Path $env:TEMP ("pyure_tpl_" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 
 try {
-    Write-Host "==> Генерация шаблона нативных раннеров (Windows + Android)..." -ForegroundColor Cyan
-    flutter create --org com.pyure --project-name pyure --platforms=windows,android $tmpDir
+    Write-Host "==> Генерация шаблона нативных раннеров (Windows + Android + Linux)..." -ForegroundColor Cyan
+    flutter create --org com.pyure --project-name pyure --platforms=windows,android,linux $tmpDir
 
     foreach ($platformDir in @("windows", "android")) {
         $src = Join-Path $tmpDir $platformDir

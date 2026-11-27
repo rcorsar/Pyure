@@ -151,41 +151,43 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
 
   @override
   Future<void> updateTrackMetadata(Track? track, Duration duration) async {
-    if (track == null) {
-      _lastMediaItemKey = null;
-      _lastMediaItemDuration = null;
-      _handler.setCurrentMediaItem(null);
-      return;
-    }
+    try {
+      if (track == null) {
+        _lastMediaItemKey = null;
+        _lastMediaItemDuration = null;
+        _handler.setCurrentMediaItem(null);
+        return;
+      }
 
-    final validDuration = duration > Duration.zero
-        ? duration
-        : (track.durationMs > 0
-              ? Duration(milliseconds: track.durationMs)
-              : null);
+      final validDuration = duration > Duration.zero
+          ? duration
+          : (track.durationMs > 0
+                ? Duration(milliseconds: track.durationMs)
+                : null);
 
-    if (_lastMediaItemKey == track.sourceUri &&
-        _lastMediaItemDuration == validDuration) {
-      return;
-    }
-    _lastMediaItemKey = track.sourceUri;
-    _lastMediaItemDuration = validDuration;
+      if (_lastMediaItemKey == track.sourceUri &&
+          _lastMediaItemDuration == validDuration) {
+        return;
+      }
+      _lastMediaItemKey = track.sourceUri;
+      _lastMediaItemDuration = validDuration;
 
-    final artPath = track.artworkPath;
-    final artUri = (artPath != null && artPath.isNotEmpty)
-        ? Uri.file(artPath)
-        : null;
+      final artPath = track.artworkPath;
+      final artUri = (artPath != null && artPath.isNotEmpty)
+          ? Uri.file(artPath)
+          : null;
 
-    _handler.setCurrentMediaItem(
-      MediaItem(
-        id: track.sourceUri,
-        title: track.title,
-        artist: track.artist,
-        album: track.album,
-        duration: validDuration,
-        artUri: artUri,
-      ),
-    );
+      _handler.setCurrentMediaItem(
+        MediaItem(
+          id: track.sourceUri,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          duration: validDuration,
+          artUri: artUri,
+        ),
+      );
+    } catch (_) {}
   }
 
   @override
@@ -195,31 +197,33 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
     required bool isLoading,
     required Duration position,
   }) async {
-    final processingState = !hasTrack
-        ? AudioProcessingState.idle
-        : (isLoading
-              ? AudioProcessingState.loading
-              : AudioProcessingState.ready);
+    try {
+      final processingState = !hasTrack
+          ? AudioProcessingState.idle
+          : (isLoading
+                ? AudioProcessingState.loading
+                : AudioProcessingState.ready);
 
-    _handler.setCurrentPlaybackState(
-      PlaybackState(
-        controls: [
-          MediaControl.skipToPrevious,
-          if (isPlaying) MediaControl.pause else MediaControl.play,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {
-          MediaAction.seek,
-          MediaAction.seekForward,
-          MediaAction.seekBackward,
-        },
-        androidCompactActionIndices: const [0, 1, 2],
-        processingState: processingState,
-        playing: isPlaying,
-        updatePosition: position,
-        speed: isPlaying ? 1.0 : 0.0,
-      ),
-    );
+      _handler.setCurrentPlaybackState(
+        PlaybackState(
+          controls: [
+            MediaControl.skipToPrevious,
+            if (isPlaying) MediaControl.pause else MediaControl.play,
+            MediaControl.skipToNext,
+          ],
+          systemActions: const {
+            MediaAction.seek,
+            MediaAction.seekForward,
+            MediaAction.seekBackward,
+          },
+          androidCompactActionIndices: const [0, 1, 2],
+          processingState: processingState,
+          playing: isPlaying,
+          updatePosition: position,
+          speed: isPlaying ? 1.0 : 0.0,
+        ),
+      );
+    } catch (_) {}
   }
 
   @override

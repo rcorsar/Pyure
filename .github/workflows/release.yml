@@ -77,16 +77,29 @@ jobs:
       - run: flutter test
       - run: flutter build apk --release
 
-      - name: Verify APK does not request INTERNET
+      - name: Verify APK permissions and resources
         run: |
           AAPT=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name aapt2 | sort -V | tail -n1)
           if [ -n "$AAPT" ]; then
-            PERMS=$("$AAPT" dump permissions build/app/outputs/flutter-apk/app-release.apk)
+            APK="build/app/outputs/flutter-apk/app-release.apk"
+            PERMS=$("$AAPT" dump permissions "$APK")
             echo "$PERMS"
             if echo "$PERMS" | grep -q "android.permission.INTERNET"; then
               echo "Unexpected INTERNET permission found in release APK!"
               exit 1
             fi
+            RES_LIST=$("$AAPT" dump resources "$APK" | grep -E "drawable/ic_stat_pyure|drawable/audio_service_play_arrow|mipmap/ic_launcher_foreground|mipmap/ic_launcher_monochrome" || true)
+            echo "$RES_LIST"
+            for required in \
+              "drawable/ic_stat_pyure" \
+              "drawable/audio_service_play_arrow" \
+              "mipmap/ic_launcher_foreground" \
+              "mipmap/ic_launcher_monochrome"; do
+              if ! echo "$RES_LIST" | grep -q "$required"; then
+                echo "Missing required APK resource (stripped by R8/shrinkResources?): $required"
+                exit 1
+              fi
+            done
           fi
 
       - name: Prepare APK artifact

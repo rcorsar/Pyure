@@ -8,6 +8,7 @@ import '../../../core/models/album.dart';
 import '../../../core/models/album_sort_order.dart';
 import '../../../core/models/track.dart';
 import '../../../core/models/track_sort_order.dart';
+import '../../../core/platform/background_scan_guard.dart';
 import '../../../core/platform/music_source.dart';
 import '../../../core/preferences/app_preferences.dart';
 import '../data/library_scanner_service.dart';
@@ -28,6 +29,10 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 final musicStorageSourceProvider = Provider<MusicStorageSource>((ref) {
   return createMusicStorageSource();
+});
+
+final backgroundScanGuardProvider = Provider<BackgroundScanGuard>((ref) {
+  return createBackgroundScanGuard();
 });
 
 final libraryScannerProvider = Provider<LibraryScannerService>((ref) {
@@ -195,6 +200,11 @@ class LibraryNotifier extends Notifier<LibraryState> {
       clearError: true,
     );
 
+    final scanGuard = ref.read(backgroundScanGuardProvider);
+    await scanGuard.startScan(folderName: folder.displayName);
+    var lastGuardNotifyMs = 0;
+    var lastKnownTotal = 0;
+
     try {
       final scanner = ref.read(libraryScannerProvider);
       await scanner.scanFolder(
@@ -206,6 +216,25 @@ class LibraryNotifier extends Notifier<LibraryState> {
             scanTotal: progress.totalFound,
             currentScanFile: progress.currentFileName,
           );
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
+          final discoveredTotal =
+              lastKnownTotal == 0 && progress.totalFound > 0;
+          final reachedEnd =
+              progress.totalFound > 0 &&
+              progress.processed >= progress.totalFound;
+          if (discoveredTotal ||
+              reachedEnd ||
+              nowMs - lastGuardNotifyMs >= 450) {
+            lastGuardNotifyMs = nowMs;
+            lastKnownTotal = progress.totalFound;
+            unawaited(
+              scanGuard.updateProgress(
+                processed: progress.processed,
+                total: progress.totalFound,
+                fileName: progress.currentFileName,
+              ),
+            );
+          }
         },
       );
 
@@ -229,6 +258,8 @@ class LibraryNotifier extends Notifier<LibraryState> {
         isScanning: false,
         errorMessage: 'Ошибка сканирования: $e',
       );
+    } finally {
+      await scanGuard.stopScan();
     }
   }
 

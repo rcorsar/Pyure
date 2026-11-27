@@ -30,9 +30,10 @@ Start-Sleep -Milliseconds 300
 
 Write-Host "==> Установка программы в $installDir..." -ForegroundColor Cyan
 if (Test-Path $installDir) {
-    Remove-Item -Recurse -Force $installDir
+    Get-ChildItem -Force $installDir | Where-Object { $_.Name -notlike "unins*" } | Remove-Item -Recurse -Force
+} else {
+    New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 }
-New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 Copy-Item -Recurse -Force (Join-Path $releaseDir "*") $installDir
 
 Write-Host "==> Создание ярлыков в меню Пуск и на Рабочем столе..." -ForegroundColor Cyan

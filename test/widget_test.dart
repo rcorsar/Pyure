@@ -14,6 +14,7 @@ import 'package:pyure/core/models/album.dart';
 import 'package:pyure/core/models/album_sort_order.dart';
 import 'package:pyure/core/models/track.dart';
 import 'package:pyure/core/models/track_sort_order.dart';
+import 'package:pyure/core/platform/background_scan_guard.dart';
 import 'package:pyure/core/platform/music_source.dart';
 import 'package:pyure/core/preferences/app_preferences.dart';
 import 'package:pyure/core/utils/formatters.dart';
@@ -714,4 +715,147 @@ void main() {
       tempDir.deleteSync(recursive: true);
     }
   });
+
+  test('AndroidBackgroundScanGuard отправляет команды start/update/stop по каналу', () async {
+    const channel = MethodChannel('com.pyure.player/background_scan_test');
+    final recordedCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      recordedCalls.add(call);
+      return null;
+    });
+
+    try {
+      final guard = AndroidBackgroundScanGuard(channel: channel);
+      await guard.startScan(folderName: 'Music');
+      await guard.updateProgress(
+        processed: 120,
+        total: 3773,
+        fileName: 'track.mp3',
+      );
+      await guard.stopScan();
+      await guard.updateProgress(
+        processed: 121,
+        total: 3773,
+        fileName: 'ignored_after_stop.mp3',
+      );
+
+      expect(recordedCalls.map((c) => c.method).toList(), [
+        'startScan',
+        'updateScanProgress',
+        'stopScan',
+      ]);
+      expect(recordedCalls[0].arguments, {'folderName': 'Music'});
+      expect(recordedCalls[1].arguments, {
+        'processed': 120,
+        'total': 3773,
+        'fileName': 'track.mp3',
+      });
+    } finally {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    }
+  });
+
+  test('LibraryNotifier запускает и останавливает BackgroundScanGuard даже при ошибке', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sp = await SharedPreferences.getInstance();
+    final prefs = AppPreferences(sp);
+    const folder = MusicFolderRef(
+      uri: r'C:\Music',
+      displayName: 'Music',
+      isSafTree: false,
+    );
+    await prefs.setSelectedFolder(folder);
+
+    final guard = _SpyBackgroundScanGuard();
+    var shouldThrow = false;
+    final scanner = _FakeLibraryScannerService(
+      storageSource: _FakeMusicStorageSource(),
+      database: _FakeAppDatabase(const []),
+      onScan: (onProgress) async {
+        onProgress(
+          const ScanProgress(
+            totalFound: 2,
+            processed: 1,
+            currentFileName: '01.mp3',
+          ),
+        );
+        if (shouldThrow) {
+          throw StateError('Simulated SAF error');
+        }
+        onProgress(
+          const ScanProgress(
+            totalFound: 2,
+            processed: 2,
+            currentFileName: '02.mp3',
+          ),
+        );
+      },
+    );
+
+    final container = ProviderContainer(
+      overrides: [
+        appPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(_FakeAppDatabase(const [])),
+        musicStorageSourceProvider.overrideWithValue(_FakeMusicStorageSource()),
+        libraryScannerProvider.overrideWithValue(scanner),
+        backgroundScanGuardProvider.overrideWithValue(guard),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(libraryProvider.notifier).rescanLibrary();
+    expect(guard.events.first, 'start:Music');
+    expect(guard.events.last, 'stop');
+    expect(guard.updateCount, greaterThanOrEqualTo(1));
+
+    guard.events.clear();
+    shouldThrow = true;
+    await container.read(libraryProvider.notifier).rescanLibrary();
+    expect(guard.events, containsAllInOrder(['start:Music', 'stop']));
+    expect(container.read(libraryProvider).isScanning, isFalse);
+  });
+}
+
+class _SpyBackgroundScanGuard implements BackgroundScanGuard {
+  final List<String> events = [];
+  int updateCount = 0;
+
+  @override
+  Future<void> startScan({required String folderName}) async {
+    events.add('start:$folderName');
+  }
+
+  @override
+  Future<void> updateProgress({
+    required int processed,
+    required int total,
+    required String fileName,
+  }) async {
+    updateCount++;
+    events.add('update:$processed/$total');
+  }
+
+  @override
+  Future<void> stopScan() async {
+    events.add('stop');
+  }
+}
+
+class _FakeLibraryScannerService extends LibraryScannerService {
+  _FakeLibraryScannerService({
+    required super.storageSource,
+    required super.database,
+    required this.onScan,
+  });
+
+  final Future<void> Function(void Function(ScanProgress progress) onProgress)
+  onScan;
+
+  @override
+  Future<void> scanFolder(
+    MusicFolderRef folder, {
+    required void Function(ScanProgress progress) onProgress,
+  }) => onScan(onProgress);
 }

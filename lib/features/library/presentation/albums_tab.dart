@@ -26,7 +26,19 @@ class AlbumsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pyure = context.pyureTheme;
-    final lib = ref.watch(libraryProvider);
+    final lib = ref.watch(
+      libraryProvider.select(
+        (s) => (
+          albums: s.albums,
+          trackCount: s.tracks.length,
+          albumSortOrder: s.albumSortOrder,
+          selectedFolder: s.selectedFolder,
+          isInitialLoading: s.isInitialLoading,
+          isScanning: s.isScanning,
+          errorMessage: s.errorMessage,
+        ),
+      ),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -39,6 +51,7 @@ class AlbumsTab extends ConsumerWidget {
             return CustomScrollView(
               key: const PageStorageKey<String>('albums_scroll'),
               controller: controller,
+              scrollCacheExtent: const ScrollCacheExtent.pixels(600),
               slivers: [
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(hPad, isWide ? 24 : 16, hPad, 14),
@@ -60,7 +73,7 @@ class AlbumsTab extends ConsumerWidget {
                               ? (lib.selectedFolder?.displayName ??
                                     'Папка не выбрана')
                               : '${lib.albums.length} альб. • '
-                                    '${formatTrackCount(lib.tracks.length)}',
+                                    '${formatTrackCount(lib.trackCount)}',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: pyure.subtleText,
                           ),
@@ -90,7 +103,7 @@ class AlbumsTab extends ConsumerWidget {
                     ],
                     if (lib.isScanning) ...[
                       const SizedBox(height: 14),
-                      _ScanProgressCard(lib: lib),
+                      const _ScanProgressCard(),
                     ],
                     if (lib.errorMessage != null) ...[
                       const SizedBox(height: 12),
@@ -201,12 +214,10 @@ class AlbumsTab extends ConsumerWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final album = lib.albums[index];
-                      return RepaintBoundary(
-                        child: _AlbumTile(
-                          album: album,
-                          compact: !isWide,
-                          onTap: () => _openAlbum(context, album),
-                        ),
+                      return _AlbumTile(
+                        album: album,
+                        compact: !isWide,
+                        onTap: () => _openAlbum(context, album),
                       );
                     },
                     childCount: lib.albums.length,
@@ -294,17 +305,25 @@ class _AlbumTile extends StatelessWidget {
   }
 }
 
-class _ScanProgressCard extends StatelessWidget {
-  const _ScanProgressCard({required this.lib});
-
-  final LibraryState lib;
+class _ScanProgressCard extends ConsumerWidget {
+  const _ScanProgressCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pyure = context.pyureTheme;
-    final label = lib.scanTotal > 0
-        ? 'Сканирование: ${lib.scanProcessed} из ${lib.scanTotal}'
+    final scan = ref.watch(
+      libraryProvider.select(
+        (s) => (
+          total: s.scanTotal,
+          processed: s.scanProcessed,
+          currentFile: s.currentScanFile,
+          fraction: s.scanFraction,
+        ),
+      ),
+    );
+    final label = scan.total > 0
+        ? 'Сканирование: ${scan.processed} из ${scan.total}'
         : 'Поиск MP3-файлов...';
 
     return Card(
@@ -322,19 +341,19 @@ class _ScanProgressCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (lib.scanTotal > 0)
+                if (scan.total > 0)
                   Text(
-                    '${((lib.scanFraction ?? 0) * 100).round()}%',
+                    '${((scan.fraction ?? 0) * 100).round()}%',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.primary,
                     ),
                   ),
               ],
             ),
-            if (lib.currentScanFile.isNotEmpty) ...[
+            if (scan.currentFile.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
-                lib.currentScanFile,
+                scan.currentFile,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: pyure.subtleText,
                 ),
@@ -345,7 +364,7 @@ class _ScanProgressCard extends StatelessWidget {
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(value: lib.scanFraction),
+              child: LinearProgressIndicator(value: scan.fraction),
             ),
           ],
         ),

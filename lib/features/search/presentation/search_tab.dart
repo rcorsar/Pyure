@@ -181,109 +181,158 @@ class _SearchTabState extends ConsumerState<SearchTab> {
                         return SmoothScrollArea(
                           thumbVisibility: isWide,
                           builder: (context, controller) {
-                            return ListView(
+                            return CustomScrollView(
                               controller: controller,
-                              padding: EdgeInsets.fromLTRB(hPad, 4, hPad, 24),
-                              children: [
-                            if (matchingAlbums.isNotEmpty) ...[
-                              Text(
-                                'Альбомы (${matchingAlbums.length})',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: pyure.subtleText,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              SizedBox(
-                                height: 168,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: matchingAlbums.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(width: 12),
-                                  itemBuilder: (context, index) {
-                                    final album = matchingAlbums[index];
-                                    return SizedBox(
-                                      width: 126,
-                                      child: Card(
-                                        clipBehavior: Clip.antiAlias,
-                                        child: InkWell(
-                                          onTap: () => _openAlbum(album),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                ArtworkBox(
-                                                  artworkPath:
-                                                      album.artworkPath,
-                                                  size: 98,
-                                                  borderRadius: 8,
-                                                  iconSize: 32,
+                              scrollCacheExtent:
+                                  const ScrollCacheExtent.pixels(600),
+                              slivers: [
+                                SliverPadding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    hPad,
+                                    4,
+                                    hPad,
+                                    0,
+                                  ),
+                                  sliver: SliverToBoxAdapter(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (matchingAlbums.isNotEmpty) ...[
+                                          Text(
+                                            'Альбомы (${matchingAlbums.length})',
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                                  color: pyure.subtleText,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  album.title,
-                                                  style: theme
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                          ),
+                                          const SizedBox(height: 10),
+                                          SizedBox(
+                                            height: 168,
+                                            child: ListView.separated(
+                                              scrollDirection: Axis.horizontal,
+                                              itemCount: matchingAlbums.length,
+                                              separatorBuilder: (_, _) =>
+                                                  const SizedBox(width: 12),
+                                              itemBuilder: (context, index) {
+                                                final album =
+                                                    matchingAlbums[index];
+                                                return SizedBox(
+                                                  width: 126,
+                                                  child: Card(
+                                                    clipBehavior:
+                                                        Clip.antiAlias,
+                                                    child: InkWell(
+                                                      onTap: () =>
+                                                          _openAlbum(album),
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              8,
+                                                            ),
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            ArtworkBox(
+                                                              artworkPath: album
+                                                                  .artworkPath,
+                                                              size: 98,
+                                                              borderRadius: 8,
+                                                              iconSize: 32,
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 6,
+                                                            ),
+                                                            Text(
+                                                              album.title,
+                                                              style: theme
+                                                                  .textTheme
+                                                                  .bodySmall
+                                                                  ?.copyWith(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                            Text(
+                                                              formatTrackCount(
+                                                                album
+                                                                    .trackCount,
+                                                              ),
+                                                              style: theme
+                                                                  .textTheme
+                                                                  .labelSmall
+                                                                  ?.copyWith(
+                                                                    color: pyure
+                                                                        .subtleText,
+                                                                  ),
+                                                              maxLines: 1,
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                                Text(
-                                                  formatTrackCount(
-                                                    album.trackCount,
+                                                    ),
                                                   ),
-                                                  style: theme
-                                                      .textTheme
-                                                      .labelSmall
-                                                      ?.copyWith(
-                                                        color: pyure.subtleText,
-                                                      ),
-                                                  maxLines: 1,
-                                                ),
-                                              ],
+                                                );
+                                              },
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                          const SizedBox(height: 18),
+                                        ],
+                                        if (tracks.isNotEmpty) ...[
+                                          Text(
+                                            'Треки (${tracks.length})',
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                                  color: pyure.subtleText,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 18),
-                            ],
-                            if (tracks.isNotEmpty) ...[
-                              Text(
-                                'Треки (${tracks.length})',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: pyure.subtleText,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              for (var i = 0; i < tracks.length; i++) ...[
-                                TrackTile(
-                                  track: tracks[i],
-                                  isActive: playback.uri == tracks[i].sourceUri,
-                                  isPlaying:
-                                      playback.uri == tracks[i].sourceUri &&
-                                      playback.isPlaying,
-                                  onTap: () => ref
-                                      .read(playerProvider.notifier)
-                                      .playQueue(tracks, initialIndex: i),
-                                ),
-                                const SizedBox(height: 2),
+                                if (tracks.isNotEmpty)
+                                  SliverPadding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      hPad,
+                                      0,
+                                      hPad,
+                                      24,
+                                    ),
+                                    sliver: SliverFixedExtentList.builder(
+                                      itemExtent: 68,
+                                      itemCount: tracks.length,
+                                      itemBuilder: (context, i) {
+                                        final track = tracks[i];
+                                        final isActive =
+                                            playback.uri == track.sourceUri;
+                                        return TrackTile(
+                                          track: track,
+                                          isActive: isActive,
+                                          isPlaying:
+                                              isActive && playback.isPlaying,
+                                          onTap: () => ref
+                                              .read(playerProvider.notifier)
+                                              .playQueue(
+                                                tracks,
+                                                initialIndex: i,
+                                              ),
+                                        );
+                                      },
+                                    ),
+                                  ),
                               ],
-                            ],
-                          ],
-                        );
+                            );
                           },
                         );
                       },

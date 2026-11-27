@@ -17,7 +17,16 @@ class TracksTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pyure = context.pyureTheme;
-    final lib = ref.watch(libraryProvider);
+    final lib = ref.watch(
+      libraryProvider.select(
+        (s) => (
+          tracks: s.tracks,
+          sortOrder: s.sortOrder,
+          isScanning: s.isScanning,
+          selectedFolder: s.selectedFolder,
+        ),
+      ),
+    );
     final playback = ref.watch(
       playerProvider.select(
         (s) => (uri: s.currentTrack?.sourceUri, isPlaying: s.isPlaying),
@@ -77,7 +86,7 @@ class TracksTab extends ConsumerWidget {
                   ),
                   if (lib.isScanning) ...[
                     const SizedBox(height: 12),
-                    LinearProgressIndicator(value: lib.scanFraction),
+                    const _TracksScanProgressBar(),
                   ],
                 ],
               ),
@@ -121,6 +130,7 @@ class TracksTab extends ConsumerWidget {
                         return ListView.builder(
                           key: const PageStorageKey<String>('tracks_scroll'),
                           controller: controller,
+                          scrollCacheExtent: const ScrollCacheExtent.pixels(600),
                           padding: EdgeInsets.fromLTRB(
                             hPad - 4,
                             8,
@@ -132,15 +142,13 @@ class TracksTab extends ConsumerWidget {
                           itemBuilder: (context, index) {
                             final track = lib.tracks[index];
                             final isActive = playback.uri == track.sourceUri;
-                            return RepaintBoundary(
-                              child: TrackTile(
-                                track: track,
-                                isActive: isActive,
-                                isPlaying: isActive && playback.isPlaying,
-                                onTap: () => ref
-                                    .read(playerProvider.notifier)
-                                    .playQueue(lib.tracks, initialIndex: index),
-                              ),
+                            return TrackTile(
+                              track: track,
+                              isActive: isActive,
+                              isPlaying: isActive && playback.isPlaying,
+                              onTap: () => ref
+                                  .read(playerProvider.notifier)
+                                  .playQueue(lib.tracks, initialIndex: index),
                             );
                           },
                         );
@@ -151,5 +159,15 @@ class TracksTab extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+class _TracksScanProgressBar extends ConsumerWidget {
+  const _TracksScanProgressBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fraction = ref.watch(libraryProvider.select((s) => s.scanFraction));
+    return LinearProgressIndicator(value: fraction);
   }
 }

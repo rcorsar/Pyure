@@ -119,24 +119,38 @@ class WindowsMusicStorageSource implements MusicStorageSource {
 
     final entries = <ScannedAudioEntry>[];
     final normalizedRoot = p.normalize(rootDir.path);
-    await _walkDirectory(
-      dir: rootDir,
-      normalizedRoot: normalizedRoot,
-      out: entries,
-    );
+    final pendingDirs = <Directory>[rootDir];
+    const concurrency = 8;
+
+    while (pendingDirs.isNotEmpty) {
+      final batchCount = pendingDirs.length < concurrency
+          ? pendingDirs.length
+          : concurrency;
+      final batch = pendingDirs.sublist(0, batchCount);
+      pendingDirs.removeRange(0, batchCount);
+
+      final results = await Future.wait([
+        for (final dir in batch)
+          _scanSingleDirectory(dir: dir, normalizedRoot: normalizedRoot),
+      ]);
+      for (final res in results) {
+        entries.addAll(res.entries);
+        pendingDirs.addAll(res.subDirs);
+      }
+    }
     return entries;
   }
 
-  Future<void> _walkDirectory({
+  Future<({List<ScannedAudioEntry> entries, List<Directory> subDirs})>
+  _scanSingleDirectory({
     required Directory dir,
     required String normalizedRoot,
-    required List<ScannedAudioEntry> out,
   }) async {
     List<FileSystemEntity> children;
     try {
       children = await dir.list(followLinks: false).toList();
     } on FileSystemException {
-      return;
+      return (entries: <ScannedAudioEntry>[], subDirs: <Directory>[]);
     }
 
     final subDirs = <Directory>[];
@@ -154,11 +168,10 @@ class WindowsMusicStorageSource implements MusicStorageSource {
         }
         subDirs.add(entity);
       } else if (entity is File) {
-        final nameLower = baseLower;
-        if (!nameLower.startsWith('._') && nameLower.endsWith('.mp3')) {
+        if (!baseLower.startsWith('._') && baseLower.endsWith('.mp3')) {
           mp3Files.add(entity);
         } else {
-          final priority = _coverCandidates.indexOf(nameLower);
+          final priority = _coverCandidates.indexOf(baseLower);
           if (priority != -1 && priority < bestCoverPriority) {
             bestCoverPriority = priority;
             siblingCover = entity.path;
@@ -170,6 +183,7 @@ class WindowsMusicStorageSource implements MusicStorageSource {
     final normalizedDir = p.normalize(dir.path);
     final isRootLevel = p.equals(normalizedDir, normalizedRoot);
     final parentName = isRootLevel ? '' : p.basename(normalizedDir);
+    final out = <ScannedAudioEntry>[];
 
     for (final file in mp3Files) {
       try {
@@ -190,13 +204,7 @@ class WindowsMusicStorageSource implements MusicStorageSource {
       }
     }
 
-    for (final subDir in subDirs) {
-      await _walkDirectory(
-        dir: subDir,
-        normalizedRoot: normalizedRoot,
-        out: out,
-      );
-    }
+    return (entries: out, subDirs: subDirs);
   }
 
   @override
@@ -216,6 +224,14 @@ class WindowsMusicStorageSource implements MusicStorageSource {
     Future<T> Function(File file) action,
   ) {
     return action(File(sourceUri));
+  }
+
+  @override
+  Future<T> withMetadataFile<T>(
+    ScannedAudioEntry entry,
+    Future<T> Function(File file, int fullFileSizeBytes) action,
+  ) {
+    return action(File(entry.sourceUri), entry.sizeBytes);
   }
 
   @override

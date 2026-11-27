@@ -74,6 +74,14 @@ abstract interface class MusicStorageSource {
     Future<T> Function(File file) action,
   );
 
+  /// Предоставляет быстрый (может быть префиксным) локальный `File` с ID3/MPEG
+  /// заголовками для ускоренного сканирования больших коллекций, а также
+  /// известный полный размер исходного файла [fullFileSizeBytes].
+  Future<T> withMetadataFile<T>(
+    ScannedAudioEntry entry,
+    Future<T> Function(File file, int fullFileSizeBytes) action,
+  );
+
   /// Возвращает строку источника, пригодную для открытия в `media_kit` `Media(...)`:
   /// путь файла на Windows или кэшированный локальный путь для Android `content://`.
   Future<String> resolvePlayableSource(String sourceUri);

@@ -1,7 +1,7 @@
 name: pyure
 description: "Pyure — offline MP3 player for Android (GrapheneOS, Samsung, Honor, Xiaomi/Redmi), Windows 10/11, and Linux (Debian, Ubuntu, Arch, Fedora)."
 publish_to: "none"
-version: 0.1.1+4
+version: 0.1.2+5
 
 environment:
   sdk: ^3.12.0

@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:pyure/app/app.dart';
+import 'package:pyure/app/theme/pyure_theme.dart';
 import 'package:pyure/core/database/app_database.dart';
 import 'package:pyure/core/models/album.dart';
 import 'package:pyure/core/models/album_sort_order.dart';
@@ -16,8 +17,10 @@ import 'package:pyure/core/models/track_sort_order.dart';
 import 'package:pyure/core/platform/music_source.dart';
 import 'package:pyure/core/preferences/app_preferences.dart';
 import 'package:pyure/core/utils/formatters.dart';
+import 'package:pyure/features/library/data/library_scanner_service.dart';
 import 'package:pyure/features/library/data/metadata_fallback_resolver.dart';
 import 'package:pyure/features/library/presentation/library_provider.dart';
+import 'package:pyure/features/library/presentation/widgets/artwork_box.dart';
 import 'package:pyure/features/player/data/audio_playback_backend.dart';
 import 'package:pyure/features/player/data/system_media_bridge.dart';
 import 'package:pyure/features/player/presentation/now_playing_sheet.dart';
@@ -112,6 +115,14 @@ class _FakeMusicStorageSource implements MusicStorageSource {
   Future<T> withReadableFile<T>(
     String sourceUri,
     Future<T> Function(File file) action,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<T> withMetadataFile<T>(
+    ScannedAudioEntry entry,
+    Future<T> Function(File file, int fullFileSizeBytes) action,
   ) {
     throw UnimplementedError();
   }
@@ -613,4 +624,94 @@ void main() {
       );
     },
   );
+
+  test('Пересчёт длительности CBR MP3 по префиксу сохраняет точное время', () {
+    // 60 КБ ID3v2 + 20 КБ аудио в 80 КБ префиксе = 500 мс при 320 kbps,
+    // а полный файл имеет 10 060 000 байт (ровно 250 секунд = 250 000 мс).
+    final estimated = LibraryScannerService.estimatePartialCbrDurationMs(
+      prefixDurationMs: 500,
+      prefixLengthBytes: 80000,
+      fullFileSizeBytes: 10060000,
+      bitrateBps: 320000,
+    );
+    expect(estimated, 250000);
+  });
+
+  testWidgets('ArtworkBox показывает заглушку при отсутствующем файле обложки', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: PyureTheme.dark(),
+        home: const Scaffold(
+          body: Center(
+            child: ArtworkBox(
+              artworkPath: r'C:\nonexistent_pyure_art\missing.jpg',
+              size: 120,
+            ),
+          ),
+        ),
+      ),
+    );
+    for (
+      var i = 0;
+      i < 20 && find.byIcon(Icons.music_note_rounded).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
+      );
+      await tester.pump();
+    }
+    expect(find.byIcon(Icons.music_note_rounded), findsOneWidget);
+  });
+
+  testWidgets('ArtworkBox декодирует существующий локальный PNG в RawImage', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync('pyure_art_test_');
+    try {
+      final pngFile = File('${tempDir.path}${Platform.pathSeparator}cover.png');
+      // Минимальный валидный 1x1 RGBA PNG (рассчитано с корректными zlib/CRC).
+      pngFile.writeAsBytesSync(const <int>[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0xF0,
+        0x1F, 0x00, 0x05, 0x00, 0x01, 0xFF, 0x89, 0x99,
+        0x3D, 0x1D, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+        0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: PyureTheme.dark(),
+          home: Scaffold(
+            body: Center(
+              child: ArtworkBox(
+                artworkPath: pngFile.path,
+                size: 120,
+              ),
+            ),
+          ),
+        ),
+      );
+      for (
+        var i = 0;
+        i < 20 && find.byType(RawImage).evaluate().isEmpty;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump();
+      }
+      expect(find.byType(RawImage), findsOneWidget);
+      expect(find.byIcon(Icons.music_note_rounded), findsNothing);
+    } finally {
+      tempDir.deleteSync(recursive: true);
+    }
+  });
 }

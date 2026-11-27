@@ -60,6 +60,11 @@ class AppDatabase {
     _db = await openDatabase(
       dbPath,
       version: _schemaVersion,
+      onConfigure: (db) async {
+        await db.rawQuery('PRAGMA journal_mode = WAL');
+        await db.rawQuery('PRAGMA synchronous = NORMAL');
+        await db.rawQuery('PRAGMA temp_store = MEMORY');
+      },
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE tracks (
@@ -159,6 +164,7 @@ class AppDatabase {
         }
       }
 
+      final batch = txn.batch();
       if (idsToDelete.isNotEmpty) {
         const chunkSize = 400;
         for (var i = 0; i < idsToDelete.length; i += chunkSize) {
@@ -167,7 +173,7 @@ class AppDatabase {
               : idsToDelete.length;
           final slice = idsToDelete.sublist(i, end);
           final placeholders = List.filled(slice.length, '?').join(',');
-          await txn.delete(
+          batch.delete(
             'tracks',
             where: 'id IN ($placeholders)',
             whereArgs: slice,
@@ -179,16 +185,17 @@ class AppDatabase {
         final values = track.toInsertMap();
         final existingId = existingIdByUri[track.sourceUri];
         if (existingId != null) {
-          await txn.update(
+          batch.update(
             'tracks',
             values,
             where: 'id = ?',
             whereArgs: [existingId],
           );
         } else {
-          await txn.insert('tracks', values);
+          batch.insert('tracks', values);
         }
       }
+      await batch.commit(noResult: true);
     });
   }
 

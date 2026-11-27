@@ -75,6 +75,8 @@ class AlbumDetailScreen extends ConsumerWidget {
                                 builder: (context, controller) {
                                   return CustomScrollView(
                                     controller: controller,
+                                    scrollCacheExtent:
+                                        const ScrollCacheExtent.pixels(600),
                                     slivers: [
                                   SliverPadding(
                                     padding: EdgeInsets.fromLTRB(
@@ -174,28 +176,27 @@ class AlbumDetailScreen extends ConsumerWidget {
                                               ? 24
                                               : 24 + bottomInset,
                                         ),
-                                        sliver: SliverList.builder(
+                                        sliver: SliverFixedExtentList.builder(
+                                        itemExtent: 64,
                                         itemCount: tracks.length,
                                         itemBuilder: (context, index) {
                                           final track = tracks[index];
                                           final isActive =
                                               playback.uri == track.sourceUri;
-                                          return RepaintBoundary(
-                                            child: TrackTile(
-                                              track: track,
-                                              showAlbum: false,
-                                              showTrackNumber: true,
-                                              isActive: isActive,
-                                              isPlaying:
-                                                  isActive &&
-                                                  playback.isPlaying,
-                                              onTap: () => ref
-                                                  .read(playerProvider.notifier)
-                                                  .playQueue(
-                                                    tracks,
-                                                    initialIndex: index,
-                                                  ),
-                                            ),
+                                          return TrackTile(
+                                            track: track,
+                                            showAlbum: false,
+                                            showTrackNumber: true,
+                                            isActive: isActive,
+                                            isPlaying:
+                                                isActive &&
+                                                playback.isPlaying,
+                                            onTap: () => ref
+                                                .read(playerProvider.notifier)
+                                                .playQueue(
+                                                  tracks,
+                                                  initialIndex: index,
+                                                ),
                                           );
                                         },
                                       ),

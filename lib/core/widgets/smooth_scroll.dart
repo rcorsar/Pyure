@@ -62,7 +62,7 @@ class _SmoothScrollPosition extends ScrollPositionWithSingleContext {
     }
 
     final base = _wheelTarget ?? pixels;
-    final target = (base + delta * 1.15).clamp(
+    final target = (base + delta * 1.1).clamp(
       minScrollExtent,
       maxScrollExtent,
     );
@@ -73,7 +73,7 @@ class _SmoothScrollPosition extends ScrollPositionWithSingleContext {
     unawaited(
       animateTo(
         target,
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 165),
         curve: Curves.easeOutCubic,
       ).whenComplete(() {
         if (token == _animToken) {

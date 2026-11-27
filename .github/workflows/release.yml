@@ -88,11 +88,12 @@ jobs:
               echo "Unexpected INTERNET permission found in release APK!"
               exit 1
             fi
-            RES_LIST=$("$AAPT" dump resources "$APK" | grep -E "drawable/ic_stat_pyure|drawable/audio_service_play_arrow|mipmap/ic_launcher_foreground|mipmap/ic_launcher_monochrome" || true)
+            RES_LIST=$("$AAPT" dump resources "$APK" | grep -E "drawable/ic_stat_pyure|drawable/audio_service_play_arrow|mipmap/ic_launcher_background|mipmap/ic_launcher_foreground|mipmap/ic_launcher_monochrome" || true)
             echo "$RES_LIST"
             for required in \
               "drawable/ic_stat_pyure" \
               "drawable/audio_service_play_arrow" \
+              "mipmap/ic_launcher_background" \
               "mipmap/ic_launcher_foreground" \
               "mipmap/ic_launcher_monochrome"; do
               if ! echo "$RES_LIST" | grep -q "$required"; then

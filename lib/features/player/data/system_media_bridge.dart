@@ -64,6 +64,7 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
   MediaControlCallbacks? _callbacks;
   String? _lastMediaItemKey;
   Duration? _lastMediaItemDuration;
+  bool _suppressedUntilPlayback = false;
 
   static Future<SystemMediaBridge> initialize() async {
     try {
@@ -78,8 +79,11 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
           notificationColor: Color(0xFF18181B),
           artDownscaleWidth: 512,
           artDownscaleHeight: 512,
-          androidNotificationOngoing: true,
-          androidStopForegroundOnPause: true,
+          androidNotificationOngoing: false,
+          // Держим Foreground Service и WakeLock активными при паузе и смене трека,
+          // чтобы Android 12–16 / GrapheneOS не замораживали процесс и не бросали
+          // ForegroundServiceStartNotAllowedException при переходе на следующий трек.
+          androidStopForegroundOnPause: false,
         ),
       );
 
@@ -92,11 +96,17 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
       }
 
       final bridge = AudioServiceMediaBridge._(handler, session);
+      handler.onStopRequested = bridge._handleServiceStop;
       bridge._listenAudioSession();
       return bridge;
     } catch (_) {
       return NoopSystemMediaBridge();
     }
+  }
+
+  Future<void> _handleServiceStop() async {
+    _suppressedUntilPlayback = true;
+    await _callbacks?.onStop();
   }
 
   void _listenAudioSession() {
@@ -144,6 +154,7 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
 
   @override
   Future<void> activateAudioSession() async {
+    _suppressedUntilPlayback = false;
     try {
       await _session?.setActive(true);
     } catch (_) {}
@@ -198,6 +209,12 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
     required Duration position,
   }) async {
     try {
+      if (isPlaying || isLoading) {
+        _suppressedUntilPlayback = false;
+      } else if (_suppressedUntilPlayback) {
+        return;
+      }
+
       final processingState = !hasTrack
           ? AudioProcessingState.idle
           : (isLoading
@@ -237,6 +254,7 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
 
 class _PyureAudioHandler extends BaseAudioHandler with SeekHandler {
   MediaControlCallbacks? callbacks;
+  Future<void> Function()? onStopRequested;
 
   void setCurrentMediaItem(MediaItem? item) {
     mediaItem.add(item);
@@ -253,7 +271,14 @@ class _PyureAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> pause() => callbacks?.onPause() ?? Future.value();
 
   @override
-  Future<void> stop() => callbacks?.onStop() ?? Future.value();
+  Future<void> stop() async {
+    if (onStopRequested != null) {
+      await onStopRequested!();
+    } else {
+      await callbacks?.onStop();
+    }
+    await super.stop();
+  }
 
   @override
   Future<void> seek(Duration position) =>
@@ -266,7 +291,7 @@ class _PyureAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToPrevious() => callbacks?.onPrevious() ?? Future.value();
 
   @override
-  Future<void> onNotificationDeleted() => callbacks?.onStop() ?? Future.value();
+  Future<void> onNotificationDeleted() => stop();
 
   @override
   Future<void> onTaskRemoved() async {

@@ -116,6 +116,11 @@ class PlayerNotifier extends Notifier<PlayerState> {
     _subscriptions.add(
       _backend.playingStream.listen((playing) {
         if (!ref.mounted) return;
+        if (!playing && _isTransitioning) {
+          // Не сбрасываем состояние воспроизведения в системной шторке на паузу
+          // во время переключения трека, пока загружается следующий файл.
+          return;
+        }
         if (playing) {
           _pausedByInterruption = false;
           unawaited(_mediaBridge.activateAudioSession());

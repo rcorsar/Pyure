@@ -431,14 +431,14 @@ void main() {
     expect(find.text('Pyure'), findsOneWidget);
   });
 
-  testWidgets('На мобильном экране альбомы идут по 4 в ряд без переполнения', (
+  testWidgets('На мобильном экране альбомы идут по 3 в ряд без счётчика треков', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
-    final fiveAlbumTracks = [
-      for (var i = 1; i <= 5; i++)
+    final fourAlbumTracks = [
+      for (var i = 1; i <= 4; i++)
         Track(
           id: i,
           title: 'Track $i',
@@ -464,7 +464,7 @@ void main() {
         overrides: [
           appPreferencesProvider.overrideWithValue(AppPreferences(prefs)),
           appDatabaseProvider.overrideWithValue(
-            _FakeAppDatabase(fiveAlbumTracks),
+            _FakeAppDatabase(fourAlbumTracks),
           ),
           musicStorageSourceProvider.overrideWithValue(
             _FakeMusicStorageSource(),
@@ -480,10 +480,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final y1 = tester.getTopLeft(find.text('Album 1')).dy;
+    final y3 = tester.getTopLeft(find.text('Album 3')).dy;
     final y4 = tester.getTopLeft(find.text('Album 4')).dy;
-    final y5 = tester.getTopLeft(find.text('Album 5')).dy;
 
-    expect(y4, equals(y1));
-    expect(y5, greaterThan(y1));
+    expect(y3, equals(y1));
+    expect(y4, greaterThan(y1));
+    expect(find.text('1 трек'), findsNothing);
   });
 }

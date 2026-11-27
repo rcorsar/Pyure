@@ -10,7 +10,7 @@ import 'album_detail_screen.dart';
 import 'library_provider.dart';
 import 'widgets/artwork_box.dart';
 
-/// Вкладка «Альбомы»: сетка плиток (4 колонки на Android, адаптивно на Windows).
+/// Вкладка «Альбомы»: сетка плиток (3 колонки на Android, адаптивно на Windows).
 class AlbumsTab extends ConsumerWidget {
   const AlbumsTab({super.key});
 
@@ -179,9 +179,9 @@ class AlbumsTab extends ConsumerWidget {
             else
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
-                  isWide ? hPad : 12.0,
+                  isWide ? hPad : 14.0,
                   0,
-                  isWide ? hPad : 12.0,
+                  isWide ? hPad : 14.0,
                   24,
                 ),
                 sliver: SliverGrid(
@@ -190,13 +190,13 @@ class AlbumsTab extends ConsumerWidget {
                           maxCrossAxisExtent: 210,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
-                          childAspectRatio: 0.72,
+                          childAspectRatio: 0.76,
                         )
                       : const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 0.56,
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.68,
                         ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -242,29 +242,29 @@ class _AlbumTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: compact
           ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
               side: BorderSide(color: pyure.cardBorder),
             )
           : null,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: EdgeInsets.all(compact ? 6 : 10),
+          padding: EdgeInsets.all(compact ? 7 : 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ArtworkBox(
                 artworkPath: album.artworkPath,
-                borderRadius: compact ? 7 : 10,
-                iconSize: compact ? 24 : 40,
+                borderRadius: compact ? 8 : 10,
+                iconSize: compact ? 30 : 40,
               ),
-              SizedBox(height: compact ? 6 : 10),
+              SizedBox(height: compact ? 7 : 10),
               Text(
                 album.title,
                 style:
                     (compact
-                            ? theme.textTheme.labelMedium?.copyWith(
-                                fontSize: 11.5,
+                            ? theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 12.5,
                                 height: 1.15,
                               )
                             : theme.textTheme.bodyMedium)
@@ -278,22 +278,11 @@ class _AlbumTile extends StatelessWidget {
                 style:
                     (compact
                             ? theme.textTheme.labelSmall?.copyWith(
-                                fontSize: 10.5,
+                                fontSize: 11.0,
                                 height: 1.15,
                               )
                             : theme.textTheme.bodySmall)
                         ?.copyWith(color: pyure.subtleText),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const Spacer(),
-              Text(
-                formatTrackCount(album.trackCount),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.85),
-                  fontSize: compact ? 10.0 : null,
-                  height: compact ? 1.15 : null,
-                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

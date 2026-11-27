@@ -8,6 +8,8 @@ $projectRoot = $PSScriptRoot
 $installDir = Join-Path $env:LOCALAPPDATA "Programs\Pyure"
 $releaseDir = Join-Path $projectRoot "build\windows\x64\runner\Release"
 $exePath = Join-Path $installDir "pyure.exe"
+$icoSource = Join-Path $projectRoot "windows\runner\resources\app_icon.ico"
+$icoPath = Join-Path $installDir "pyure.ico"
 $startMenuShortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Pyure.lnk"
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Pyure.lnk"
 
@@ -35,6 +37,7 @@ if (Test-Path $installDir) {
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 }
 Copy-Item -Recurse -Force (Join-Path $releaseDir "*") $installDir
+Copy-Item -Force $icoSource $icoPath
 
 Write-Host "==> Создание ярлыков в меню Пуск и на Рабочем столе..." -ForegroundColor Cyan
 $wsShell = New-Object -ComObject WScript.Shell
@@ -43,9 +46,13 @@ foreach ($lnkPath in @($startMenuShortcut, $desktopShortcut)) {
     $shortcut = $wsShell.CreateShortcut($lnkPath)
     $shortcut.TargetPath = $exePath
     $shortcut.WorkingDirectory = $installDir
-    $shortcut.IconLocation = "$exePath,0"
+    $shortcut.IconLocation = "$icoPath,0"
     $shortcut.Description = "Pyure — offline MP3 player"
     $shortcut.Save()
+}
+
+if (Test-Path "$env:SystemRoot\System32\ie4uinit.exe") {
+    & "$env:SystemRoot\System32\ie4uinit.exe" -show | Out-Null
 }
 
 Write-Host "`nГотово! Pyure установлен как программа Windows:" -ForegroundColor Green

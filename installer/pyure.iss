@@ -17,7 +17,8 @@ PrivilegesRequired=lowest
 OutputDir=..\dist
 OutputBaseFilename=Pyure-{#MyAppVersion}-windows-x64-setup
 SetupIconFile=..\windows\runner\resources\app_icon.ico
-UninstallDisplayIcon={app}\pyure.exe
+UninstallDisplayIcon={app}\pyure.ico
+ChangesAssociations=yes
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -39,14 +40,16 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\data"
 Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.ico"
 Type: files; Name: "{app}\pyure.exe"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\windows\runner\resources\app_icon.ico"; DestDir: "{app}"; DestName: "pyure.ico"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Pyure"; Filename: "{app}\pyure.exe"
-Name: "{autodesktop}\Pyure"; Filename: "{app}\pyure.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Pyure"; Filename: "{app}\pyure.exe"; IconFilename: "{app}\pyure.ico"
+Name: "{autodesktop}\Pyure"; Filename: "{app}\pyure.exe"; IconFilename: "{app}\pyure.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\pyure.exe"; Description: "{cm:LaunchProgram,Pyure}"; Flags: nowait postinstall skipifsilent
@@ -54,6 +57,7 @@ Filename: "{app}\pyure.exe"; Description: "{cm:LaunchProgram,Pyure}"; Flags: now
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"
 Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.ico"
 Type: files; Name: "{app}\*.exe"
 Type: files; Name: "{app}\*.dat"
 Type: files; Name: "{app}\*.log"
@@ -68,10 +72,25 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM pyure.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
+procedure RefreshShellIcons();
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\ie4uinit.exe'), '-show', '', SW_HIDE, ewNoWait, ResultCode);
+end;
+
 function InitializeSetup(): Boolean;
 begin
   KillRunningPyure();
   Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    RefreshShellIcons();
+  end;
 end;
 
 function InitializeUninstall(): Boolean;
@@ -98,5 +117,6 @@ begin
       Sleep(150);
       DelTree(AppDir, True, True, True);
     end;
+    RefreshShellIcons();
   end;
 end;

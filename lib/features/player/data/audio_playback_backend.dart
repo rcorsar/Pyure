@@ -35,15 +35,22 @@ class MediaKitPlaybackBackend implements AudioPlaybackBackend {
 
   final Player _player;
   Future<void>? _androidAudioInit;
+  bool _hasOpenedInitialMedia = false;
 
   Future<void> _configureAndroidAudioPipeline() async {
     try {
       final platform = _player.platform;
       if (platform is NativePlayer) {
-        // Предпочитаем AudioTrack (с запасом буфера) поверх OpenSL ES, чтобы
-        // Android 14-16 / GrapheneOS не останавливали аудиотракт при выключенном экране.
+        // Держим один и тот же AudioTrack открытым с фиксированными параметрами
+        // 48 kHz / stereo и тишиной в простое, чтобы Android 15–17 / GrapheneOS
+        // не пересоздавали и не глушили аудиопоток при смене трека в фоне.
         await platform.setProperty('ao', 'audiotrack,opensles');
+        await platform.setProperty('audio-stream-silence', 'yes');
+        await platform.setProperty('gapless-audio', 'yes');
+        await platform.setProperty('audio-samplerate', '48000');
+        await platform.setProperty('audio-channels', 'stereo');
         await platform.setProperty('audio-buffer', '1.5');
+        await platform.setProperty('cache', 'no');
       }
     } catch (_) {}
   }
@@ -70,6 +77,17 @@ class MediaKitPlaybackBackend implements AudioPlaybackBackend {
   @override
   Future<void> open(String source, {required bool play}) async {
     await _ensureAndroidConfigured();
+    if (Platform.isAndroid && _hasOpenedInitialMedia) {
+      final platform = _player.platform;
+      if (platform is NativePlayer) {
+        // Меняем файл на лету через `loadfile replace` без `stop()`,
+        // чтобы не разрушать активный foreground AudioTrack в фоне.
+        await platform.command(['loadfile', source, 'replace']);
+        await platform.setProperty('pause', play ? 'no' : 'yes');
+        return;
+      }
+    }
+    _hasOpenedInitialMedia = true;
     return _player.open(Media(source), play: play);
   }
 

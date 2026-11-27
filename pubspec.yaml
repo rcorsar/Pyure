@@ -1,7 +1,7 @@
 name: pyure
 description: "Pyure — offline MP3 player for Windows and Android (GrapheneOS)."
 publish_to: "none"
-version: 0.1.0+1
+version: 0.1.0+3
 
 environment:
   sdk: ^3.12.0

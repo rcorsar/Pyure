@@ -371,6 +371,9 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
       state = state.copyWith(isLoadingTrack: false);
       await _syncMediaBridgeState();
+      if (autoplay) {
+        unawaited(_precacheNextTrack(index));
+      }
       await ref
           .read(appPreferencesProvider)
           .saveLastPlayback(
@@ -389,6 +392,20 @@ class PlayerNotifier extends Notifier<PlayerState> {
     } finally {
       _isTransitioning = false;
     }
+  }
+
+  Future<void> _precacheNextTrack(int currentIndex) async {
+    if (!ref.mounted || state.queue.isEmpty) return;
+    final nextIndex = currentIndex + 1 < state.queue.length
+        ? currentIndex + 1
+        : (state.repeatMode == PlaybackRepeatMode.all ? 0 : -1);
+    if (nextIndex < 0 || nextIndex == currentIndex) return;
+    final nextTrack = state.queue[nextIndex];
+    try {
+      await ref
+          .read(musicStorageSourceProvider)
+          .resolvePlayableSource(nextTrack.sourceUri);
+    } catch (_) {}
   }
 
   Future<void> _persistCurrentState() async {

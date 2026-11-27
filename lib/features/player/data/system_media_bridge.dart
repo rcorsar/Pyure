@@ -217,7 +217,7 @@ class AudioServiceMediaBridge implements SystemMediaBridge {
 
       final processingState = !hasTrack
           ? AudioProcessingState.idle
-          : (isLoading
+          : (isLoading && !isPlaying
                 ? AudioProcessingState.loading
                 : AudioProcessingState.ready);
 

@@ -430,4 +430,60 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.text('Pyure'), findsOneWidget);
   });
+
+  testWidgets('На мобильном экране альбомы идут по 4 в ряд без переполнения', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    final fiveAlbumTracks = [
+      for (var i = 1; i <= 5; i++)
+        Track(
+          id: i,
+          title: 'Track $i',
+          artist: 'Artist A',
+          album: 'Album $i',
+          albumKey: 'album:$i',
+          sourceUri: 'sample://album_$i.mp3',
+          folderUri: 'sample://root',
+          parentFolderName: 'Album $i',
+          durationMs: 180000,
+          addedAtEpochMs: 1000 + i,
+          fileSizeBytes: 3000,
+          lastModifiedMs: 1000,
+        ),
+    ];
+
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appPreferencesProvider.overrideWithValue(AppPreferences(prefs)),
+          appDatabaseProvider.overrideWithValue(
+            _FakeAppDatabase(fiveAlbumTracks),
+          ),
+          musicStorageSourceProvider.overrideWithValue(
+            _FakeMusicStorageSource(),
+          ),
+          audioPlaybackBackendProvider.overrideWithValue(
+            _FakePlaybackBackend(),
+          ),
+          systemMediaBridgeProvider.overrideWithValue(NoopSystemMediaBridge()),
+        ],
+        child: const PyureApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final y1 = tester.getTopLeft(find.text('Album 1')).dy;
+    final y4 = tester.getTopLeft(find.text('Album 4')).dy;
+    final y5 = tester.getTopLeft(find.text('Album 5')).dy;
+
+    expect(y4, equals(y1));
+    expect(y5, greaterThan(y1));
+  });
 }

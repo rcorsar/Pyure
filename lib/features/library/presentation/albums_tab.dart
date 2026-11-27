@@ -10,7 +10,7 @@ import 'album_detail_screen.dart';
 import 'library_provider.dart';
 import 'widgets/artwork_box.dart';
 
-/// Вкладка «Альбомы»: сетка плиток (2 колонки на Android, адаптивно на Windows).
+/// Вкладка «Альбомы»: сетка плиток (4 колонки на Android, адаптивно на Windows).
 class AlbumsTab extends ConsumerWidget {
   const AlbumsTab({super.key});
 
@@ -178,7 +178,12 @@ class AlbumsTab extends ConsumerWidget {
               )
             else
               SliverPadding(
-                padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
+                padding: EdgeInsets.fromLTRB(
+                  isWide ? hPad : 12.0,
+                  0,
+                  isWide ? hPad : 12.0,
+                  24,
+                ),
                 sliver: SliverGrid(
                   gridDelegate: isWide
                       ? const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -188,10 +193,10 @@ class AlbumsTab extends ConsumerWidget {
                           childAspectRatio: 0.72,
                         )
                       : const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.68,
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.56,
                         ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -199,6 +204,7 @@ class AlbumsTab extends ConsumerWidget {
                       return RepaintBoundary(
                         child: _AlbumTile(
                           album: album,
+                          compact: !isWide,
                           onTap: () => _openAlbum(context, album),
                         ),
                       );
@@ -217,10 +223,15 @@ class AlbumsTab extends ConsumerWidget {
 }
 
 class _AlbumTile extends StatelessWidget {
-  const _AlbumTile({required this.album, required this.onTap});
+  const _AlbumTile({
+    required this.album,
+    required this.onTap,
+    this.compact = false,
+  });
 
   final Album album;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -229,33 +240,49 @@ class _AlbumTile extends StatelessWidget {
 
     return Card(
       clipBehavior: Clip.antiAlias,
+      shape: compact
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: pyure.cardBorder),
+            )
+          : null,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: EdgeInsets.all(compact ? 6 : 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ArtworkBox(
                 artworkPath: album.artworkPath,
-                borderRadius: 10,
-                iconSize: 40,
+                borderRadius: compact ? 7 : 10,
+                iconSize: compact ? 24 : 40,
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: compact ? 6 : 10),
               Text(
                 album.title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style:
+                    (compact
+                            ? theme.textTheme.labelMedium?.copyWith(
+                                fontSize: 11.5,
+                                height: 1.15,
+                              )
+                            : theme.textTheme.bodyMedium)
+                        ?.copyWith(fontWeight: FontWeight.w600),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
               Text(
                 album.artist,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: pyure.subtleText,
-                ),
+                style:
+                    (compact
+                            ? theme.textTheme.labelSmall?.copyWith(
+                                fontSize: 10.5,
+                                height: 1.15,
+                              )
+                            : theme.textTheme.bodySmall)
+                        ?.copyWith(color: pyure.subtleText),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -264,6 +291,8 @@ class _AlbumTile extends StatelessWidget {
                 formatTrackCount(album.trackCount),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.primary.withValues(alpha: 0.85),
+                  fontSize: compact ? 10.0 : null,
+                  height: compact ? 1.15 : null,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
